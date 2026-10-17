@@ -13,12 +13,14 @@ import {
 import { useTheme } from '../hooks/useTheme';
 import { downloadBackup, restoreBackup } from '../db/backup';
 
+import { EnginesPanel } from './settings/EnginesPanel';
+
 interface ThemeModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type Tab = 'presets' | 'customize' | 'data';
+type Tab = 'presets' | 'customize' | 'engines' | 'data';
 
 function toHex(value: string): string {
   // <input type="color"> only accepts #rrggbb.
@@ -95,7 +97,7 @@ export function ThemeModal({ isOpen, onClose }: ThemeModalProps) {
         {/* Tabs */}
         <div className="px-5 pt-3">
           <div className="segmented" role="tablist">
-            {(['presets', 'customize', 'data'] as Tab[]).map((t) => (
+            {(['presets', 'customize', 'engines', 'data'] as Tab[]).map((t) => (
               <button key={t} role="tab" aria-pressed={tab === t} onClick={() => setTab(t)} className="capitalize">
                 {t}
               </button>
@@ -104,6 +106,8 @@ export function ThemeModal({ isOpen, onClose }: ThemeModalProps) {
         </div>
 
         <div className="overflow-y-auto p-5">
+          {tab === 'engines' && <EnginesPanel />}
+
           {tab === 'presets' && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {THEME_PRESETS.map((p) => {
