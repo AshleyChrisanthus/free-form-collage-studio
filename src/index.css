@@ -1,0 +1,232 @@
+@import 'tailwindcss';
+
+/* Tailwind v4: `dark:` variant follows the [data-theme] attribute set by the theme system. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* Expose the theme CSS variables as Tailwind colors (bg-surface, text-fg, border-line, ...). */
+@theme inline {
+  --color-app: var(--bg-primary);
+  --color-panel: var(--bg-secondary);
+  --color-panel-2: var(--bg-tertiary);
+  --color-hover: var(--bg-hover);
+  --color-card: var(--card-bg);
+  --color-fg: var(--text-primary);
+  --color-fg-muted: var(--text-secondary);
+  --color-fg-subtle: var(--text-tertiary);
+  --color-line: var(--border);
+  --color-line-soft: var(--border-light);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-bg);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --font-sans: var(--font-ui);
+  --radius-glass: var(--radius);
+}
+
+:root {
+  --font-ui: 'Segoe UI', system-ui, -apple-system, 'SF Pro Text', sans-serif;
+  --radius: 14px;
+  --radius-sm: 8px;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.18);
+  --transition: 0.2s ease;
+
+  /* Glass recipe */
+  --glass-blur: 20px;
+  --glass-saturate: 180%;
+  --glass-alpha: 72%;
+  --glass-border-alpha: 55%;
+
+  /* Default Dark Mode */
+  --bg-primary: #0d0d0f;
+  --bg-secondary: #1c1c1e;
+  --bg-tertiary: #2c2c2e;
+  --bg-hover: #3a3a3c;
+  --text-primary: #f5f5f7;
+  --text-secondary: #a1a1a6;
+  --text-tertiary: #636366;
+  --border: #38383a;
+  --border-light: #2c2c2e;
+  --accent: #0a84ff;
+  --accent-hover: #409cff;
+  --accent-bg: rgba(10, 132, 255, 0.12);
+  --danger: #ff453a;
+  --success: #30d158;
+  --warning: #ffd60a;
+  --card-bg: #1c1c1e;
+  --card-border: #2c2c2e;
+  --modal-bg: #1c1c1e;
+  --modal-backdrop: rgba(0, 0, 0, 0.65);
+  --glass-highlight: rgba(255, 255, 255, 0.06);
+
+  color-scheme: dark;
+}
+
+[data-theme='light'] {
+  --bg-primary: #f5f5f7;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f0f0f2;
+  --bg-hover: #e8e8ec;
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-tertiary: #aeaeb2;
+  --border: #d2d2d7;
+  --border-light: #e5e5ea;
+  --accent: #0071e3;
+  --accent-hover: #0077ed;
+  --accent-bg: rgba(0, 113, 227, 0.08);
+  --card-bg: #ffffff;
+  --card-border: #e5e5ea;
+  --modal-bg: #ffffff;
+  --modal-backdrop: rgba(0, 0, 0, 0.4);
+  --glass-highlight: rgba(255, 255, 255, 0.7);
+
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  transition:
+    background-color var(--transition),
+    color var(--transition);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Ambient accent glow behind glass surfaces */
+.app-backdrop {
+  background:
+    radial-gradient(60rem 40rem at 10% -10%, var(--accent-bg), transparent 60%),
+    radial-gradient(50rem 35rem at 110% 110%, var(--accent-bg), transparent 60%),
+    var(--bg-primary);
+}
+
+/* ---------- Glassmorphism utilities ---------- */
+@utility glass {
+  background-color: color-mix(in srgb, var(--bg-secondary) var(--glass-alpha), transparent);
+  border: 1px solid color-mix(in srgb, var(--border-light) var(--glass-border-alpha), transparent);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--shadow-md);
+}
+
+@utility glass-strong {
+  background-color: color-mix(in srgb, var(--modal-bg, var(--bg-secondary)) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-light) 70%, transparent);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--shadow-lg);
+}
+
+/* Apple-style Glass Card */
+.apple-card {
+  background-color: color-mix(in srgb, var(--card-bg) 80%, transparent);
+  border: 1px solid var(--card-border, var(--border-light));
+  border-radius: var(--radius);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  transition:
+    transform var(--transition),
+    box-shadow var(--transition),
+    border-color var(--transition);
+}
+.apple-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--accent);
+}
+
+/* Glass Buttons */
+.apple-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  background-color: color-mix(in srgb, var(--bg-hover) 55%, transparent);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.apple-btn:hover {
+  background-color: var(--bg-hover);
+}
+.apple-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.apple-btn-primary {
+  background-color: var(--accent);
+  color: #ffffff;
+}
+.apple-btn-primary:hover {
+  background-color: var(--accent-hover);
+  transform: translateY(-1px);
+}
+.apple-btn-ghost {
+  background-color: transparent;
+}
+.apple-btn-icon {
+  padding: 8px;
+}
+
+.apple-input {
+  background-color: var(--input-bg, color-mix(in srgb, var(--bg-tertiary, var(--bg-hover)) 70%, transparent));
+  border: 1px solid var(--input-border, var(--border-light));
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 6px 10px;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color var(--transition);
+}
+.apple-input:focus {
+  border-color: var(--input-focus, var(--accent));
+}
+
+/* Segmented control (used for engine/mode switchers) */
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 10px;
+  background-color: color-mix(in srgb, var(--bg-hover) 60%, transparent);
+}
+.segmented > button {
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all var(--transition);
+}
+.segmented > button[aria-pressed='true'] {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb, var(--bg-hover)) transparent;
+}
