@@ -9,6 +9,10 @@ import {
 import type { Point, BoundingBox, LineObject } from '../types/scene';
 import { generateId } from '../lib/id';
 import { lineBounds } from '../lib/geometry';
+import {
+  computeCursorZoom,
+  clampFramingZoom,
+} from './viewport';
 
 export function Stage() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -66,12 +70,21 @@ export function Stage() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' && !e.repeat) {
+        const target = e.target as HTMLElement | null;
+        if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
         isSpacePressedRef.current = true;
+        if (pointerStateRef.current.mode === 'idle') {
+          setCursor('grab');
+        }
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
         isSpacePressedRef.current = false;
+        if (pointerStateRef.current.mode === 'idle') {
+          const store = useSceneStore.getState();
+          setCursor(store.tool.mode === 'pan' ? 'grab' : 'default');
+        }
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -79,6 +92,46 @@ export function Stage() {
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+    };
+  }, []);
+
+  // Native non-passive wheel listener for smooth cursor-anchored zoom & trackpad pan
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const onWheelNative = (e: WheelEvent) => {
+      e.preventDefault();
+      const store = useSceneStore.getState();
+      const rect = el.getBoundingClientRect();
+      const cursor: Point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+
+      if (store.viewport.workMode === 'unlimited') {
+        // Plain two-finger trackpad scroll (no ctrl, deltaMode 0, has deltaX) pans
+        if (!e.ctrlKey && e.deltaMode === 0 && Math.abs(e.deltaX) > 0) {
+          store.panBy(-e.deltaX, -e.deltaY);
+        } else {
+          // Wheel zoom anchored at cursor
+          const res = computeCursorZoom(
+            store.viewport.ulZoom,
+            { x: store.viewport.ulPanX, y: store.viewport.ulPanY },
+            cursor,
+            e.deltaY,
+            e.ctrlKey
+          );
+          store.setZoom(res.zoom);
+          store.setPan(res.panX, res.panY);
+        }
+      } else {
+        // Framing mode zoom
+        const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.005 : 0.0015));
+        store.setFramingZoom(clampFramingZoom(store.viewport.zoomLevel * factor));
+      }
+    };
+
+    el.addEventListener('wheel', onWheelNative, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', onWheelNative);
     };
   }, []);
 
@@ -454,37 +507,20 @@ export function Stage() {
     setCursor(store.tool.mode === 'pan' ? 'grab' : 'default');
   };
 
-  // Cursor-anchored wheel zooming
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const store = useSceneStore.getState();
-    if (!containerRef.current) return;
-
-    const rect = containerRef.current.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
-
-    const factor = e.deltaY < 0 ? 1.1 : 0.9;
-
-    if (store.viewport.workMode === 'unlimited') {
-      store.zoomBy(factor, cx, cy);
-    } else {
-      store.setFramingZoom(store.viewport.zoomLevel * factor);
-    }
-  };
-
   // Calculate adaptive dot grid CSS background
-  const zoom = viewport.workMode === 'unlimited' ? viewport.ulZoom : viewport.zoomLevel;
-  const panX = viewport.workMode === 'unlimited' ? viewport.ulPanX : viewport.renderOffsetX;
-  const panY = viewport.workMode === 'unlimited' ? viewport.ulPanY : viewport.renderOffsetY;
+  const isUnlimited = viewport.workMode === 'unlimited';
+  const isDark = viewport.unlimitedTheme === 'dark';
+  const dotColor = isDark ? '#334155' : '#cbd5e1';
+  const bgColor = isUnlimited ? (isDark ? '#020617' : '#f8fafc') : 'var(--surface-sunken, #090d16)';
 
-  let gridSpacing = 40 * zoom;
+  let gridSpacing = 40 * (isUnlimited ? viewport.ulZoom : viewport.zoomLevel);
   while (gridSpacing < 15) gridSpacing *= 2;
   while (gridSpacing > 80) gridSpacing /= 2;
 
-  const isDark = viewport.unlimitedTheme === 'dark';
-  const dotColor = isDark ? 'rgba(148, 163, 184, 0.2)' : 'rgba(100, 116, 139, 0.25)';
-  const bgColor = isDark ? '#020617' : '#f8fafc';
+  const panX = isUnlimited ? viewport.ulPanX : viewport.renderOffsetX;
+  const panY = isUnlimited ? viewport.ulPanY : viewport.renderOffsetY;
+  const bgPosX = ((panX % gridSpacing) + gridSpacing) % gridSpacing;
+  const bgPosY = ((panY % gridSpacing) + gridSpacing) % gridSpacing;
 
   return (
     <div
@@ -493,15 +529,16 @@ export function Stage() {
       style={{
         cursor,
         backgroundColor: bgColor,
-        backgroundImage: `radial-gradient(${dotColor} 1.2px, transparent 1.2px)`,
+        backgroundImage: isUnlimited
+          ? `radial-gradient(circle, ${dotColor} 1.2px, transparent 1.7px)`
+          : 'none',
         backgroundSize: `${gridSpacing}px ${gridSpacing}px`,
-        backgroundPosition: `${panX}px ${panY}px`,
+        backgroundPosition: `${bgPosX}px ${bgPosY}px`,
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      onWheel={handleWheel}
     >
       {/* Layer 2: Scene Canvas */}
       <canvas
