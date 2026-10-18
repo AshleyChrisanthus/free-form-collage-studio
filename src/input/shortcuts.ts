@@ -55,6 +55,48 @@ export const SHORTCUTS: ShortcutDefinition[] = [
     action: () => useSceneStore.getState().redo(),
   },
 
+  // Navigation & Mode
+  {
+    key: 'm',
+    description: 'Toggle Creation ⇄ Framing mode',
+    category: 'Navigation',
+    action: () => {
+      const mode = useSceneStore.getState().viewport.workMode;
+      useSceneStore.getState().setWorkMode(mode === 'unlimited' ? 'standard' : 'unlimited');
+    },
+  },
+  {
+    key: 'l',
+    ctrlOrMeta: true,
+    description: 'Toggle canvas lock',
+    category: 'Navigation',
+    action: (e) => {
+      e.preventDefault();
+      const locked = useSceneStore.getState().viewport.canvasLocked;
+      useSceneStore.getState().setCanvasLock(!locked);
+    },
+  },
+  {
+    key: '!',
+    shift: true,
+    description: 'Fit to content (Shift+1)',
+    category: 'Navigation',
+    action: (e) => {
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent('canvas:fit-content'));
+    },
+  },
+  {
+    key: ')',
+    shift: true,
+    description: 'Reset view (Shift+0)',
+    category: 'Navigation',
+    action: (e) => {
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent('canvas:reset-view'));
+    },
+  },
+
   // Editing
   {
     key: 'a',
@@ -227,6 +269,8 @@ export function handleGlobalKeyDown(
   for (const sc of SHORTCUTS) {
     const keyMatch =
       sc.key.toLowerCase() === e.key.toLowerCase() ||
+      (sc.key === '!' && (e.key === '!' || e.key === '1')) ||
+      (sc.key === ')' && (e.key === ')' || e.key === '0')) ||
       (sc.key === 'Delete' && e.key === 'Delete') ||
       (sc.key === 'Backspace' && e.key === 'Backspace') ||
       (sc.key.startsWith('Arrow') && sc.key === e.key);
