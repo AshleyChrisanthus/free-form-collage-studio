@@ -17,6 +17,7 @@ import {
   ArrowLeftRight,
   Rows3,
   Columns3,
+  Maximize2,
 } from 'lucide-react';
 import { useSceneStore } from '../../store/sceneStore';
 import { useSingleSelectedObject, useSelectedObjects } from '../../store/selectors';
@@ -54,6 +55,7 @@ export function Inspector() {
   const restackHorizontally = useSceneStore((state) => state.restackHorizontally);
   const setSpacing = useSceneStore((state) => state.setSpacing);
   const setHorizontalSpacing = useSceneStore((state) => state.setHorizontalSpacing);
+  const setActiveDialog = useSceneStore((state) => state.setActiveDialog);
   const beginTransaction = useSceneStore((state) => state.beginTransaction);
   const commitTransaction = useSceneStore((state) => state.commitTransaction);
 
@@ -144,6 +146,16 @@ export function Inspector() {
                   />
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => setActiveDialog('precision-object-sizing')}
+                className="apple-btn apple-btn-secondary w-full flex items-center justify-center gap-1.5 py-1 text-[11px] mt-1"
+                title="Precision Sizing Dialog (Presets, Units, Aspect Lock)"
+              >
+                <Maximize2 size={12} className="text-accent" />
+                <span>Precision Sizing...</span>
+              </button>
 
               {/* Rotation */}
               <div className="pt-2">

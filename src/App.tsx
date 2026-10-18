@@ -7,6 +7,7 @@ import { Inspector } from './components/layout/Inspector';
 import { Toast } from './components/layout/Toast';
 import { ThemeModal } from './components/ThemeModal';
 import { ShortcutsHelp } from './components/ShortcutsHelp';
+import { PrecisionObjectSizingDialog } from './components/framing/PrecisionObjectSizingDialog';
 import { handleGlobalKeyDown } from './input/shortcuts';
 import { useVariantStore } from './store/variantStore';
 
@@ -56,6 +57,7 @@ export default function App() {
       {/* Modals */}
       <ThemeModal isOpen={themeOpen} onClose={() => setThemeOpen(false)} />
       <ShortcutsHelp isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <PrecisionObjectSizingDialog />
     </div>
   );
 }
