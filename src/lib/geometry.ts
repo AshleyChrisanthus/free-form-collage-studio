@@ -1,4 +1,4 @@
-import type { BaseCanvasObject, BoundingBox, CanvasObject, Point, BindingEdge } from '../types/scene';
+import type { BoundingBox, CanvasObject, Point, BindingEdge } from '../types/scene';
 
 export function clamp(val: number, min: number, max: number): number {
   return Math.min(Math.max(val, min), max);
@@ -23,7 +23,7 @@ export function rotatePoint(pt: Point, center: Point, angleDeg: number): Point {
 /**
  * Compute the axis-aligned bounding box (AABB) of a rotated object.
  */
-export function getRotatedAABB(obj: BaseCanvasObject): BoundingBox {
+export function getRotatedAABB(obj: BoundingBox & { rotation?: number }): BoundingBox {
   const width = Math.max(1, obj.width || 1);
   const height = Math.max(1, obj.height || 1);
   const x = obj.x;
@@ -99,7 +99,7 @@ export function lineBounds(points: Point[], strokeWidth: number = 2): BoundingBo
 /**
  * Compute the union bounding box enclosing all given objects.
  */
-export function unionBounds(objs: BaseCanvasObject[]): BoundingBox | null {
+export function unionBounds(objs: Array<BoundingBox & { rotation?: number }>): BoundingBox | null {
   if (!objs || objs.length === 0) return null;
 
   let minX = Infinity;

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import {
   Layers,
   ChevronLeft,
-  ChevronRight,
   ArrowUpToLine,
   ArrowDownToLine,
   ChevronUp,
@@ -194,13 +193,12 @@ export function LayersPanel() {
             No objects in canvas
           </div>
         ) : (
-          reversedIndices.map((arrayIdx, visualIdx) => {
+          reversedIndices.map((arrayIdx) => {
             const obj = objects[arrayIdx];
             return (
               <LayerRow
                 key={obj.id}
                 object={obj}
-                index={visualIdx}
                 arrayIndex={arrayIdx}
                 isSelected={selection.includes(obj.id)}
                 onSelect={handleSelect}

@@ -25,7 +25,12 @@ export interface Renderer {
   hitTestHandle: (
     worldPt: Point,
     zoom: number
-  ) => { obj: CanvasObject; handle: ResizeHandleType; cursor: string } | null;
+  ) => {
+    obj: { id: string; x: number; y: number; width: number; height: number; rotation: number };
+    handle: ResizeHandleType;
+    cursor: string;
+    isMulti?: boolean;
+  } | null;
   screenToWorld: (screenX: number, screenY: number) => Point;
   worldToScreen: (worldX: number, worldY: number) => Point;
   destroy: () => void;

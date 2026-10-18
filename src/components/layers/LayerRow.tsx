@@ -5,7 +5,6 @@ import {
   Lock,
   Unlock,
   PenTool,
-  Image as ImageIcon,
   GripVertical,
 } from 'lucide-react';
 import type { CanvasObject } from '../../types/scene';
@@ -14,7 +13,6 @@ import { assetCache } from '../../canvas/assetCache';
 
 interface LayerRowProps {
   object: CanvasObject;
-  index: number;
   arrayIndex: number;
   isSelected: boolean;
   onSelect: (id: string, isShift: boolean) => void;
@@ -30,7 +28,6 @@ interface LayerRowProps {
 
 export function LayerRow({
   object,
-  index,
   arrayIndex,
   isSelected,
   onSelect,

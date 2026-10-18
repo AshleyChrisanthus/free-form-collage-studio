@@ -21,8 +21,6 @@ export function ToolRail() {
   const setToolLocked = useSceneStore((state) => state.setToolLocked);
   const layersOpen = useSceneStore((state) => state.ui.layersOpen);
   const toggleLayers = useSceneStore((state) => state.toggleLayers);
-  const addObject = useSceneStore((state) => state.addObject);
-  const showToast = useSceneStore((state) => state.showToast);
 
   const tools: Array<{
     id: ToolMode;

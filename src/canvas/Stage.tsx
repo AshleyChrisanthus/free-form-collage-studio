@@ -613,6 +613,7 @@ export function Stage() {
 
   const handlePointerUp = () => {
     const store = useSceneStore.getState();
+    const pState = pointerStateRef.current;
     snapCandidatesRef.current = null;
     setOverlayState((prev) => ({ ...prev, marquee: null, guidelines: [] }));
 

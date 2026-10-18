@@ -27,7 +27,7 @@ export async function decodeTiff(buffer: ArrayBuffer): Promise<DecodedTiffResult
     throw new Error('Failed to decode TIFF pixel data');
   }
 
-  const clamped = new Uint8ClampedArray(rgba.buffer, rgba.byteOffset, rgba.byteLength);
+  const clamped = new Uint8ClampedArray(rgba);
   const imageData = new ImageData(clamped, width, height);
 
   // Create a PNG blob for browsers that cannot natively redisplay the raw TIFF blob
