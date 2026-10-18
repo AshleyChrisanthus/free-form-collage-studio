@@ -11,12 +11,13 @@ import type {
   CanvasPreset,
   BoundingBox,
 } from '../types/scene';
-import { clamp, lineBounds, getBindingAnchor } from '../lib/geometry';
+import { clamp, lineBounds, getBindingAnchor, unionBounds } from '../lib/geometry';
 import { generateId } from '../lib/id';
 import { isLine } from '../types/guards';
 import { SnapshotHistoryEngine, type SceneSnapshot } from './history/snapshotHistory';
 import { PatchHistoryEngine } from './history/patchHistory';
 import { useVariantStore } from './variantStore';
+import { computeCanvasSize } from '../framing/canvasSize';
 
 export const DEFAULT_VIEWPORT: ViewportState = {
   workMode: 'unlimited',
@@ -118,6 +119,7 @@ export interface SceneState {
   setFramingZoom: (zoom: number) => void;
   setCanvasPreset: (preset: CanvasPreset) => void;
   setCanvasLock: (locked: boolean) => void;
+  wrapToContent: () => void;
   setCustomCanvasSize: (w: number, h: number) => void;
   setUnlimitedTheme: (theme: 'dark' | 'light') => void;
 
@@ -631,8 +633,61 @@ export const useSceneStore = create<SceneState>()(
       },
 
       setCanvasLock: (locked: boolean) => {
+        const vp = get().viewport;
+        if (vp.canvasLocked === locked) return;
+
+        if (locked) {
+          const stage = computeCanvasSize(get().objects, vp, get().settings);
+          set((draft) => {
+            draft.viewport.canvasLocked = true;
+            draft.viewport.lockedCanvasW = stage.width;
+            draft.viewport.lockedCanvasH = stage.height;
+            const dx = stage.x;
+            const dy = stage.y;
+            for (const obj of draft.objects) {
+              obj.x -= dx;
+              obj.y -= dy;
+            }
+            draft.viewport.renderOffsetX = (draft.viewport.renderOffsetX || 0) + dx;
+            draft.viewport.renderOffsetY = (draft.viewport.renderOffsetY || 0) + dy;
+          });
+        } else {
+          set((draft) => {
+            draft.viewport.canvasLocked = false;
+            const dx = draft.viewport.renderOffsetX || 0;
+            const dy = draft.viewport.renderOffsetY || 0;
+            for (const obj of draft.objects) {
+              obj.x += dx;
+              obj.y += dy;
+            }
+            draft.viewport.renderOffsetX = 0;
+            draft.viewport.renderOffsetY = 0;
+            draft.viewport.lockedCanvasW = null;
+            draft.viewport.lockedCanvasH = null;
+          });
+        }
+      },
+
+      wrapToContent: () => {
+        const objs = get().objects;
+        if (objs.length === 0) return;
+        const b = unionBounds(objs);
+        if (!b) return;
+
+        mutateWithHistory('Wrap to Content', (draft) => {
+          for (const obj of draft.objects) {
+            obj.x -= b.x;
+            obj.y -= b.y;
+          }
+        });
+
         set((draft) => {
-          draft.viewport.canvasLocked = locked;
+          draft.viewport.canvasMode = 'auto';
+          draft.viewport.canvasLocked = false;
+          draft.viewport.lockedCanvasW = null;
+          draft.viewport.lockedCanvasH = null;
+          draft.viewport.renderOffsetX = 0;
+          draft.viewport.renderOffsetY = 0;
         });
       },
 

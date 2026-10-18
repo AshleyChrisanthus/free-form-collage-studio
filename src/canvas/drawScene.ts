@@ -8,6 +8,9 @@ export interface DrawSceneOptions {
   background?: string;
   includeIds?: string[];
   pixelRatio?: number;
+  stageBounds?: BoundingBox;
+  dimExterior?: boolean;
+  transparentBg?: boolean;
 }
 
 /**
@@ -21,6 +24,50 @@ export function drawScene(
 ): void {
   const includeSet = opts?.includeIds ? new Set(opts.includeIds) : null;
 
+  // 1. Framing Engine Bounded Stage Rendering
+  if (opts?.stageBounds) {
+    const { x, y, width, height } = opts.stageBounds;
+
+    // In edit view with exterior dimming:
+    if (opts.dimExterior) {
+      // Pass A: Draw dimmed ghost objects outside the stage (40% alpha)
+      for (const obj of objects) {
+        if (includeSet && !includeSet.has(obj.id)) continue;
+        if (opts.clipRect && !rectIntersectsObject(opts.clipRect, obj)) continue;
+        drawSingleObject(ctx, obj, 0.4);
+      }
+    }
+
+    // Draw the stage backdrop surface with drop shadow
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = 28;
+    ctx.shadowOffsetY = 8;
+    ctx.fillStyle = opts.transparentBg ? '#1e293b' : (opts.background || '#ffffff');
+    ctx.fillRect(x, y, width, height);
+    ctx.restore();
+
+    // If transparentBg, draw checkerboard pattern inside stage
+    if (opts.transparentBg) {
+      drawCheckerboard(ctx, x, y, width, height, 16);
+    }
+
+    // Pass B: Clip to the bounded stage and draw full-opacity objects
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, width, height);
+    ctx.clip();
+
+    for (const obj of objects) {
+      if (includeSet && !includeSet.has(obj.id)) continue;
+      if (opts.clipRect && !rectIntersectsObject(opts.clipRect, obj)) continue;
+      drawSingleObject(ctx, obj, 1.0);
+    }
+    ctx.restore();
+    return;
+  }
+
+  // 2. Creation Engine (Unlimited Canvas) Rendering
   if (opts?.background) {
     ctx.save();
     ctx.fillStyle = opts.background;
@@ -44,40 +91,69 @@ export function drawScene(
       }
     }
 
-    const width = Math.max(1, obj.width || 1);
-    const height = Math.max(1, obj.height || 1);
-    const cx = obj.x + width / 2;
-    const cy = obj.y + height / 2;
-
-    ctx.save();
-    ctx.translate(cx, cy);
-
-    if (obj.rotation) {
-      ctx.rotate((obj.rotation * Math.PI) / 180);
-    }
-
-    const scaleX = obj.flipH ? -1 : 1;
-    const scaleY = obj.flipV ? -1 : 1;
-    if (scaleX !== 1 || scaleY !== 1) {
-      ctx.scale(scaleX, scaleY);
-    }
-
-    ctx.globalAlpha = Math.max(0, Math.min(1, obj.opacity ?? 1.0));
-
-    if (isImage(obj)) {
-      const bitmap = assetCache.get(obj.assetId);
-      if (bitmap) {
-        ctx.drawImage(bitmap, -width / 2, -height / 2, width, height);
-      } else {
-        // Placeholder while asset is loading
-        drawPlaceholder(ctx, -width / 2, -height / 2, width, height);
-      }
-    } else if (isLine(obj)) {
-      drawLineObject(ctx, obj, cx, cy);
-    }
-
-    ctx.restore();
+    drawSingleObject(ctx, obj, 1.0);
   }
+}
+
+function drawCheckerboard(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  size: number = 16
+) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  for (let cy = y; cy < y + h; cy += size) {
+    for (let cx = x; cx < x + w; cx += size) {
+      const isEven = (Math.floor(cx / size) + Math.floor(cy / size)) % 2 === 0;
+      ctx.fillStyle = isEven ? '#334155' : '#1e293b';
+      ctx.fillRect(cx, cy, size, size);
+    }
+  }
+  ctx.restore();
+}
+
+function drawSingleObject(
+  ctx: CanvasRenderingContext2D,
+  obj: CanvasObject,
+  alphaMod: number = 1.0
+) {
+  const width = Math.max(1, obj.width || 1);
+  const height = Math.max(1, obj.height || 1);
+  const cx = obj.x + width / 2;
+  const cy = obj.y + height / 2;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  if (obj.rotation) {
+    ctx.rotate((obj.rotation * Math.PI) / 180);
+  }
+
+  const scaleX = obj.flipH ? -1 : 1;
+  const scaleY = obj.flipV ? -1 : 1;
+  if (scaleX !== 1 || scaleY !== 1) {
+    ctx.scale(scaleX, scaleY);
+  }
+
+  ctx.globalAlpha = Math.max(0, Math.min(1, (obj.opacity ?? 1.0) * alphaMod));
+
+  if (isImage(obj)) {
+    const bitmap = assetCache.get(obj.assetId);
+    if (bitmap) {
+      ctx.drawImage(bitmap, -width / 2, -height / 2, width, height);
+    } else {
+      drawPlaceholder(ctx, -width / 2, -height / 2, width, height);
+    }
+  } else if (isLine(obj)) {
+    drawLineObject(ctx, obj, cx, cy);
+  }
+
+  ctx.restore();
 }
 
 function drawPlaceholder(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
@@ -121,40 +197,25 @@ function drawLineObject(
     ctx.setLineDash([]);
   }
 
-  // Draw main path
   ctx.beginPath();
   ctx.moveTo(localPts[0].x, localPts[0].y);
-
-  if (line.lineType === 'curve' && localPts.length > 2) {
-    for (let i = 1; i < localPts.length - 1; i++) {
-      const xc = (localPts[i].x + localPts[i + 1].x) / 2;
-      const yc = (localPts[i].y + localPts[i + 1].y) / 2;
-      ctx.quadraticCurveTo(localPts[i].x, localPts[i].y, xc, yc);
-    }
-    ctx.lineTo(localPts[localPts.length - 1].x, localPts[localPts.length - 1].y);
-  } else if (line.lineType === 'elbow' && localPts.length === 2) {
-    const midX = localPts[1].x;
-    const midY = localPts[0].y;
-    ctx.lineTo(midX, midY);
-    ctx.lineTo(localPts[1].x, localPts[1].y);
-  } else {
-    for (let i = 1; i < localPts.length; i++) {
-      ctx.lineTo(localPts[i].x, localPts[i].y);
-    }
+  for (let i = 1; i < localPts.length; i++) {
+    ctx.lineTo(localPts[i].x, localPts[i].y);
   }
-
   ctx.stroke();
 
-  // Draw arrowheads
+  // Draw arrowheads if any
   if (line.startArrowhead && line.startArrowhead !== 'none') {
-    const angle = Math.atan2(localPts[0].y - localPts[1].y, localPts[0].x - localPts[1].x);
-    drawArrowhead(ctx, localPts[0], angle, line.startArrowhead, line.strokeWidth);
+    drawArrowhead(ctx, localPts[1], localPts[0], line.startArrowhead, line.strokeWidth);
   }
-
   if (line.endArrowhead && line.endArrowhead !== 'none') {
-    const len = localPts.length;
-    const angle = Math.atan2(localPts[len - 1].y - localPts[len - 2].y, localPts[len - 1].x - localPts[len - 2].x);
-    drawArrowhead(ctx, localPts[len - 1], angle, line.endArrowhead, line.strokeWidth);
+    drawArrowhead(
+      ctx,
+      localPts[localPts.length - 2],
+      localPts[localPts.length - 1],
+      line.endArrowhead,
+      line.strokeWidth
+    );
   }
 
   ctx.restore();
@@ -162,52 +223,51 @@ function drawLineObject(
 
 function drawArrowhead(
   ctx: CanvasRenderingContext2D,
-  tip: Point,
-  angle: number,
-  head: Arrowhead,
+  from: Point,
+  to: Point,
+  type: Arrowhead,
   strokeWidth: number
 ) {
-  const size = Math.max(10, strokeWidth * 3.5);
+  const angle = Math.atan2(to.y - from.y, to.x - from.x);
+  const size = Math.max(8, strokeWidth * 3.5);
+
   ctx.save();
-  ctx.translate(tip.x, tip.y);
+  ctx.translate(to.x, to.y);
   ctx.rotate(angle);
 
   ctx.beginPath();
-  switch (head) {
+  switch (type) {
     case 'arrow':
-      ctx.moveTo(-size, -size * 0.5);
+      ctx.moveTo(-size, -size / 2);
       ctx.lineTo(0, 0);
-      ctx.lineTo(-size, size * 0.5);
+      ctx.lineTo(-size, size / 2);
       ctx.stroke();
       break;
-
     case 'triangle':
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-size, -size * 0.5);
-      ctx.lineTo(-size, size * 0.5);
+      ctx.moveTo(-size, -size / 2);
+      ctx.lineTo(0, 0);
+      ctx.lineTo(-size, size / 2);
       ctx.closePath();
       ctx.fill();
       break;
-
     case 'circle':
-      ctx.arc(-size * 0.4, 0, size * 0.4, 0, Math.PI * 2);
+      ctx.arc(-size / 2, 0, size / 2, 0, Math.PI * 2);
       ctx.fill();
       break;
-
     case 'diamond':
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-size * 0.5, -size * 0.35);
-      ctx.lineTo(-size, 0);
-      ctx.lineTo(-size * 0.5, size * 0.35);
+      ctx.moveTo(-size, 0);
+      ctx.lineTo(-size / 2, -size / 2);
+      ctx.lineTo(0, 0);
+      ctx.lineTo(-size / 2, size / 2);
       ctx.closePath();
       ctx.fill();
       break;
-
     case 'bar':
-      ctx.moveTo(0, -size * 0.6);
-      ctx.lineTo(0, size * 0.6);
+      ctx.moveTo(0, -size / 2);
+      ctx.lineTo(0, size / 2);
       ctx.stroke();
       break;
   }
+
   ctx.restore();
 }

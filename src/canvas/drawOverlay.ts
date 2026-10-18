@@ -3,7 +3,9 @@ import type {
   CanvasObject,
   Point,
   ViewportState,
+  GlobalSettings,
 } from '../types/scene';
+import { computeCanvasSize } from '../framing/canvasSize';
 
 export type ResizeHandleType =
   | 'tl'
@@ -74,13 +76,14 @@ export function drawOverlay(
   objects: CanvasObject[],
   overlay: OverlayState,
   viewport: ViewportState,
-  zoom: number
+  zoom: number,
+  settings?: GlobalSettings
 ): void {
   const selectedObjs = objects.filter((o) => overlay.selection.includes(o.id));
 
   // 1. Framing Stage Border (in standard framing mode)
   if (viewport.workMode === 'standard') {
-    drawFramingStageBounds(ctx, viewport);
+    drawFramingStageBounds(ctx, objects, viewport, settings);
   }
 
   // 2. Selection outlines
@@ -223,16 +226,17 @@ export function drawOverlay(
   }
 }
 
-function drawFramingStageBounds(ctx: CanvasRenderingContext2D, viewport: ViewportState) {
-  const w = viewport.lockedCanvasW || viewport.customCanvasW || 1200;
-  const h = viewport.lockedCanvasH || viewport.customCanvasH || 800;
-  const x = viewport.renderOffsetX || 0;
-  const y = viewport.renderOffsetY || 0;
+function drawFramingStageBounds(
+  ctx: CanvasRenderingContext2D,
+  objects: CanvasObject[],
+  viewport: ViewportState,
+  settings?: GlobalSettings
+) {
+  const stage = computeCanvasSize(objects, viewport, settings);
 
   ctx.save();
-  // Shadowed boundary around framing canvas
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(x, y, w, h);
+  ctx.strokeStyle = viewport.canvasLocked ? '#3b82f6' : 'rgba(255, 255, 255, 0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(stage.x, stage.y, stage.width, stage.height);
   ctx.restore();
 }

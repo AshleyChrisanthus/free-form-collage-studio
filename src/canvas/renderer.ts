@@ -9,6 +9,7 @@ import {
 import { pointInObject } from '../lib/geometry';
 import type { CanvasObject, Point } from '../types/scene';
 import { assetCache } from './assetCache';
+import { computeCanvasSize } from '../framing/canvasSize';
 
 export interface RendererOptions {
   container: HTMLDivElement;
@@ -77,9 +78,13 @@ export function createRenderer({
     if (vp.workMode === 'unlimited') {
       return { panX: vp.ulPanX, panY: vp.ulPanY, zoom: vp.ulZoom };
     }
+    const state = useSceneStore.getState();
+    const stage = computeCanvasSize(state.objects, vp, state.settings);
+    const stageCenterX = stage.x + stage.width / 2;
+    const stageCenterY = stage.y + stage.height / 2;
     return {
-      panX: vp.renderOffsetX + (width / 2) * (1 - vp.zoomLevel),
-      panY: vp.renderOffsetY + (height / 2) * (1 - vp.zoomLevel),
+      panX: width / 2 - stageCenterX * vp.zoomLevel + (vp.renderOffsetX || 0),
+      panY: height / 2 - stageCenterY * vp.zoomLevel + (vp.renderOffsetY || 0),
       zoom: vp.zoomLevel,
     };
   };
@@ -105,6 +110,8 @@ export function createRenderer({
 
     const { panX, panY, zoom } = getCamera();
     const state = useSceneStore.getState();
+    const isFraming = state.viewport.workMode === 'standard';
+    const stage = isFraming ? computeCanvasSize(state.objects, state.viewport, state.settings) : undefined;
 
     // Redraw Scene Layer
     if (sceneDirty && sceneCtx) {
@@ -124,7 +131,13 @@ export function createRenderer({
         height: botRight.y - topLeft.y + 100,
       };
 
-      drawScene(sceneCtx, state.objects, { clipRect });
+      drawScene(sceneCtx, state.objects, {
+        clipRect,
+        stageBounds: stage,
+        dimExterior: isFraming,
+        background: state.settings.bgColor,
+        transparentBg: state.settings.transparentBg,
+      });
       sceneDirty = false;
     }
 
@@ -136,7 +149,7 @@ export function createRenderer({
       overlayCtx.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * panX, dpr * panY);
 
       const overlay = getOverlayState();
-      drawOverlay(overlayCtx, state.objects, overlay, state.viewport, zoom);
+      drawOverlay(overlayCtx, state.objects, overlay, state.viewport, zoom, state.settings);
       overlayDirty = false;
     }
 
