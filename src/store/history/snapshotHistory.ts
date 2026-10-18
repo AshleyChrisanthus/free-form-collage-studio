@@ -19,6 +19,10 @@ export class SnapshotHistoryEngine implements HistoryEngine {
     private onStateChange?: () => void
   ) {}
 
+  isTransactionActive(): boolean {
+    return this.currentPending !== null;
+  }
+
   begin(label: string): void {
     if (this.currentPending) return; // Already in transaction
     this.currentPending = {

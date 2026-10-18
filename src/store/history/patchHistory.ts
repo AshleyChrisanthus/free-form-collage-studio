@@ -25,6 +25,10 @@ export class PatchHistoryEngine<T extends object> implements HistoryEngine {
     void this._getState;
   }
 
+  isTransactionActive(): boolean {
+    return this.currentPending !== null;
+  }
+
   begin(label: string): void {
     if (this.currentPending) return;
     this.currentPending = {

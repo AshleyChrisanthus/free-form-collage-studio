@@ -14,4 +14,5 @@ export interface HistoryEngine {
   clear(): void;
   getUndoLabel(): string | null;
   getRedoLabel(): string | null;
+  isTransactionActive(): boolean;
 }

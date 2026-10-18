@@ -18,6 +18,7 @@ import { SnapshotHistoryEngine, type SceneSnapshot } from './history/snapshotHis
 import { PatchHistoryEngine } from './history/patchHistory';
 import { useVariantStore } from './variantStore';
 import { computeCanvasSize } from '../framing/canvasSize';
+import { restackObjects, applyProximitySpacing } from '../layout/stacking';
 
 export const DEFAULT_VIEWPORT: ViewportState = {
   workMode: 'unlimited',
@@ -126,6 +127,12 @@ export interface SceneState {
   // Settings
   updateSettings: (patch: Partial<GlobalSettings>) => void;
 
+  // Layout Actions
+  restackVertically: () => void;
+  restackHorizontally: () => void;
+  setSpacing: (spacing: number) => void;
+  setHorizontalSpacing: (hSpacing: number) => void;
+
   // Tool
   setToolMode: (mode: ToolMode) => void;
   setToolLocked: (locked: boolean) => void;
@@ -216,9 +223,10 @@ export const useSceneStore = create<SceneState>()(
     ) => {
       const isSnapshot = useVariantStore.getState().variants.history === 'snapshot';
       if (isSnapshot) {
-        snapshotEngine.begin(label);
+        const inTx = snapshotEngine.isTransactionActive();
+        if (!inTx) snapshotEngine.begin(label);
         set(mutator);
-        snapshotEngine.commit();
+        if (!inTx) snapshotEngine.commit();
       } else {
         const [nextState, patches, inversePatches] = produceWithPatches(
           {
@@ -708,6 +716,41 @@ export const useSceneStore = create<SceneState>()(
       updateSettings: (patch: Partial<GlobalSettings>) => {
         set((draft) => {
           draft.settings = { ...draft.settings, ...patch };
+        });
+      },
+
+      // Layout Actions
+      restackVertically: () => {
+        mutateWithHistory('Re-Stack Vertically', (draft) => {
+          draft.objects = restackObjects(draft.objects, 'vertical', draft.settings.spacing);
+        });
+      },
+
+      restackHorizontally: () => {
+        mutateWithHistory('Re-Stack Horizontally', (draft) => {
+          draft.objects = restackObjects(
+            draft.objects,
+            'horizontal',
+            draft.settings.horizontalSpacing
+          );
+        });
+      },
+
+      setSpacing: (spacing: number) => {
+        set((draft) => {
+          draft.settings.spacing = spacing;
+        });
+        mutateWithHistory('Change Vertical Spacing', (draft) => {
+          draft.objects = applyProximitySpacing(draft.objects, 'vertical', spacing);
+        });
+      },
+
+      setHorizontalSpacing: (hSpacing: number) => {
+        set((draft) => {
+          draft.settings.horizontalSpacing = hSpacing;
+        });
+        mutateWithHistory('Change Horizontal Spacing', (draft) => {
+          draft.objects = applyProximitySpacing(draft.objects, 'horizontal', hSpacing);
         });
       },
 
