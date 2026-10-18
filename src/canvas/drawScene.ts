@@ -32,6 +32,7 @@ export function drawScene(
     if (opts.dimExterior) {
       // Pass A: Draw dimmed ghost objects outside the stage (40% alpha)
       for (const obj of objects) {
+        if (obj.hidden) continue;
         if (includeSet && !includeSet.has(obj.id)) continue;
         if (opts.clipRect && !rectIntersectsObject(opts.clipRect, obj)) continue;
         drawSingleObject(ctx, obj, 0.4);
@@ -59,6 +60,7 @@ export function drawScene(
     ctx.clip();
 
     for (const obj of objects) {
+      if (obj.hidden) continue;
       if (includeSet && !includeSet.has(obj.id)) continue;
       if (opts.clipRect && !rectIntersectsObject(opts.clipRect, obj)) continue;
       drawSingleObject(ctx, obj, 1.0);
@@ -80,6 +82,9 @@ export function drawScene(
   }
 
   for (const obj of objects) {
+    if (obj.hidden) {
+      continue;
+    }
     if (includeSet && !includeSet.has(obj.id)) {
       continue;
     }

@@ -8,6 +8,7 @@ import {
   LockOpen,
   MousePointer,
   Minus,
+  Layers,
 } from 'lucide-react';
 import { useSceneStore } from '../../store/sceneStore';
 import type { ToolMode } from '../../types/scene';
@@ -18,6 +19,8 @@ export function ToolRail() {
   const tool = useSceneStore((state) => state.tool);
   const setToolMode = useSceneStore((state) => state.setToolMode);
   const setToolLocked = useSceneStore((state) => state.setToolLocked);
+  const layersOpen = useSceneStore((state) => state.ui.layersOpen);
+  const toggleLayers = useSceneStore((state) => state.toggleLayers);
   const addObject = useSceneStore((state) => state.addObject);
   const showToast = useSceneStore((state) => state.showToast);
 
@@ -103,6 +106,19 @@ export function ToolRail() {
         aria-label="Import Image"
       >
         <ImagePlus size={18} />
+      </button>
+
+      {/* Layers Panel Toggle Button */}
+      <button
+        type="button"
+        className={`apple-btn apple-btn-icon transition-all ${
+          layersOpen ? 'bg-accent/20 text-accent font-semibold' : 'apple-btn-ghost text-fg'
+        }`}
+        onClick={() => toggleLayers()}
+        title="Toggle Layers Panel"
+        aria-label="Toggle Layers Panel"
+      >
+        <Layers size={18} />
       </button>
 
       <input

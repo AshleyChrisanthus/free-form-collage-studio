@@ -119,7 +119,7 @@ export function drawOverlay(
   zoom: number,
   settings?: GlobalSettings
 ): void {
-  const selectedObjs = objects.filter((o) => overlay.selection.includes(o.id));
+  const selectedObjs = objects.filter((o) => overlay.selection.includes(o.id) && !o.hidden);
 
   // 1. Framing Stage Border (in standard framing mode)
   if (viewport.workMode === 'standard') {
@@ -129,7 +129,7 @@ export function drawOverlay(
   // 2. Selection outlines
   for (const obj of selectedObjs) {
     const isGrouped = obj.groupId !== null;
-    const strokeColor = isGrouped ? '#06b6d4' : '#3b82f6';
+    const strokeColor = obj.locked ? '#94a3b8' : isGrouped ? '#06b6d4' : '#3b82f6';
 
     const width = Math.max(1, obj.width);
     const height = Math.max(1, obj.height);
@@ -147,8 +147,8 @@ export function drawOverlay(
     ctx.setLineDash([4 / zoom, 4 / zoom]);
     ctx.strokeRect(-width / 2, -height / 2, width, height);
 
-    // Stalk line connecting rotation handle to top-center (for single selection)
-    if (selectedObjs.length === 1) {
+    // Stalk line connecting rotation handle to top-center (for single unlocked selection)
+    if (selectedObjs.length === 1 && !selectedObjs[0].locked) {
       ctx.beginPath();
       ctx.moveTo(0, -height / 2);
       ctx.lineTo(0, -height / 2 - 24 / zoom);
@@ -162,10 +162,10 @@ export function drawOverlay(
   }
 
   // 3. Handles (for single object or combined multi-selection box)
-  if (selectedObjs.length === 1) {
+  if (selectedObjs.length === 1 && !selectedObjs[0].locked) {
     const handles = getObjectResizeHandles(selectedObjs[0], zoom);
     renderHandles(ctx, handles, zoom);
-  } else if (selectedObjs.length > 1) {
+  } else if (selectedObjs.length > 1 && !selectedObjs.every((o) => o.locked)) {
     // Combined multi-selection bounding box & handles
     let minX = Infinity;
     let minY = Infinity;

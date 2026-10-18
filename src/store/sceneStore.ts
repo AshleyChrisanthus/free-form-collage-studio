@@ -103,6 +103,9 @@ export interface SceneState {
   sendBackward: (ids: string[]) => void;
   groupSelected: () => void;
   ungroupSelected: () => void;
+  setObjectLock: (id: string, locked: boolean) => void;
+  setObjectVisibility: (id: string, hidden: boolean) => void;
+  renameObject: (id: string, name: string) => void;
 
   // Selection
   setSelection: (ids: string[]) => void;
@@ -603,6 +606,33 @@ export const useSceneStore = create<SceneState>()(
             if (sel.includes(obj.id)) {
               obj.groupId = null;
             }
+          }
+        });
+      },
+
+      setObjectLock: (id: string, locked: boolean) => {
+        mutateWithHistory(locked ? 'Lock Object' : 'Unlock Object', (draft) => {
+          const obj = draft.objects.find((o) => o.id === id);
+          if (obj) {
+            obj.locked = locked;
+          }
+        });
+      },
+
+      setObjectVisibility: (id: string, hidden: boolean) => {
+        mutateWithHistory(hidden ? 'Hide Object' : 'Show Object', (draft) => {
+          const obj = draft.objects.find((o) => o.id === id);
+          if (obj) {
+            obj.hidden = hidden;
+          }
+        });
+      },
+
+      renameObject: (id: string, name: string) => {
+        mutateWithHistory('Rename Object', (draft) => {
+          const obj = draft.objects.find((o) => o.id === id);
+          if (obj) {
+            obj.name = name;
           }
         });
       },

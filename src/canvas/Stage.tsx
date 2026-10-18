@@ -22,6 +22,7 @@ import {
   type SnapGuide,
 } from '../snapping/snap';
 import { computeResize, computeMultiResize } from './transforms';
+import { ContextMenu } from '../components/canvas/ContextMenu';
 import { Upload } from 'lucide-react';
 
 export function Stage() {
@@ -43,6 +44,11 @@ export function Stage() {
   const pointerStateRef = useRef<PointerMachineState>(createInitialPointerState());
   const [cursor, setCursor] = useState<string>('default');
   const [isDragOver, setIsDragOver] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean;
+    x: number;
+    y: number;
+  }>({ isOpen: false, x: 0, y: 0 });
   const snapCandidatesRef = useRef<CandidateLines | null>(null);
 
   const workMode = useSceneStore((state) => state.viewport.workMode);
@@ -330,7 +336,7 @@ export function Stage() {
         store.beginTransaction('Move Objects');
         const boxes = new Map<string, BoundingBox & { rotation: number }>();
         for (const obj of store.objects) {
-          if (targets.includes(obj.id)) {
+          if (targets.includes(obj.id) && !obj.locked) {
             boxes.set(obj.id, {
               x: obj.x,
               y: obj.y,
@@ -672,6 +678,29 @@ export function Stage() {
     }
   };
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const renderer = rendererRef.current;
+    if (!renderer || !containerRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const worldPt = renderer.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+    const store = useSceneStore.getState();
+
+    const hit = renderer.hitTest(worldPt);
+    if (hit) {
+      if (!store.selection.includes(hit.id)) {
+        store.setSelection([hit.id]);
+      }
+    }
+
+    setContextMenu({
+      isOpen: true,
+      x: e.clientX,
+      y: e.clientY,
+    });
+  };
+
   return (
     <div
       ref={containerRef}
@@ -689,6 +718,7 @@ export function Stage() {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
+      onContextMenu={handleContextMenu}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -703,6 +733,14 @@ export function Stage() {
       <canvas
         ref={overlayCanvasRef}
         className="absolute inset-0 pointer-events-none"
+      />
+
+      {/* Canvas Context Menu */}
+      <ContextMenu
+        isOpen={contextMenu.isOpen}
+        x={contextMenu.x}
+        y={contextMenu.y}
+        onClose={() => setContextMenu((prev) => ({ ...prev, isOpen: false }))}
       />
 
       {/* Drag & Drop Visual Glass Overlay */}

@@ -42,11 +42,14 @@ export interface ObjectBinding {
 
 export interface BaseCanvasObject {
   id: string;
+  name?: string;
   groupId: number | null;
   opacity: number; // 0.0 to 1.0
   rotation: number; // degrees -180 to 180
   flipH: boolean;
   flipV: boolean;
+  locked?: boolean;
+  hidden?: boolean;
   x: number; // Normalized bounding box top-left
   y: number;
   width: number;

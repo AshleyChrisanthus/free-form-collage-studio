@@ -196,6 +196,7 @@ export function createRenderer({
     // Iterate in reverse (front to back)
     for (let i = objects.length - 1; i >= 0; i--) {
       const obj = objects[i];
+      if (obj.hidden || obj.locked) continue;
       if (pointInObject(worldPt, obj, zoom)) {
         return obj;
       }
@@ -217,7 +218,7 @@ export function createRenderer({
 
     if (state.selection.length === 1) {
       const obj = state.objects.find((o) => o.id === state.selection[0]);
-      if (!obj) return null;
+      if (!obj || obj.hidden || obj.locked) return null;
 
       const handles = getObjectResizeHandles(obj, zoom);
       const hitRadius = Math.max(8, 10 / zoom);
@@ -232,7 +233,7 @@ export function createRenderer({
     }
 
     // Multi-selection bounding box handles
-    const selected = state.objects.filter((o) => state.selection.includes(o.id));
+    const selected = state.objects.filter((o) => state.selection.includes(o.id) && !o.hidden && !o.locked);
     if (selected.length === 0) return null;
 
     let minX = Infinity;
