@@ -28,7 +28,7 @@ export interface HandlePosition {
 export interface OverlayState {
   selection: string[];
   marquee: BoundingBox | null;
-  guidelines: { orientation: 'h' | 'v'; pos: number }[];
+  guidelines: Array<{ orientation: 'h' | 'v'; pos: number; start?: number; end?: number }>;
   hoveredBinding: { objId: string; edge: string; point: Point } | null;
   cropRect: BoundingBox | null;
   lassoPoints: Point[] | null;
@@ -185,11 +185,15 @@ export function drawOverlay(
     for (const guide of overlay.guidelines) {
       ctx.beginPath();
       if (guide.orientation === 'v') {
-        ctx.moveTo(guide.pos, -100000);
-        ctx.lineTo(guide.pos, 100000);
+        const start = guide.start !== undefined ? guide.start : -100000;
+        const end = guide.end !== undefined ? guide.end : 100000;
+        ctx.moveTo(guide.pos, start);
+        ctx.lineTo(guide.pos, end);
       } else {
-        ctx.moveTo(-100000, guide.pos);
-        ctx.lineTo(100000, guide.pos);
+        const start = guide.start !== undefined ? guide.start : -100000;
+        const end = guide.end !== undefined ? guide.end : 100000;
+        ctx.moveTo(start, guide.pos);
+        ctx.lineTo(end, guide.pos);
       }
       ctx.stroke();
     }

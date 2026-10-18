@@ -8,12 +8,19 @@ import {
 } from '../input/pointerMachine';
 import type { Point, BoundingBox, LineObject } from '../types/scene';
 import { generateId } from '../lib/id';
-import { lineBounds } from '../lib/geometry';
+import { lineBounds, unionBounds } from '../lib/geometry';
 import {
   computeCursorZoom,
   clampFramingZoom,
 } from './viewport';
 import { ingestFiles, pasteFromClipboard } from '../import/ingest';
+import {
+  precomputeSnapLines,
+  snapMove,
+  snapResize,
+  type CandidateLines,
+  type SnapGuide,
+} from '../snapping/snap';
 import { Upload } from 'lucide-react';
 
 export function Stage() {
@@ -35,6 +42,7 @@ export function Stage() {
   const pointerStateRef = useRef<PointerMachineState>(createInitialPointerState());
   const [cursor, setCursor] = useState<string>('default');
   const [isDragOver, setIsDragOver] = useState(false);
+  const snapCandidatesRef = useRef<CandidateLines | null>(null);
 
   const workMode = useSceneStore((state) => state.viewport.workMode);
   const unlimitedTheme = useSceneStore((state) => state.viewport.unlimitedTheme);
@@ -263,6 +271,13 @@ export function Stage() {
           rotation: handleHit.obj.rotation,
         });
 
+        snapCandidatesRef.current = precomputeSnapLines(
+          store.objects,
+          new Set([handleHit.obj.id]),
+          store.viewport,
+          store.settings
+        );
+
         pointerStateRef.current = {
           ...createInitialPointerState(),
           mode: handleHit.handle === 'rot' ? 'rotating' : 'resizing',
@@ -303,6 +318,13 @@ export function Stage() {
             });
           }
         }
+
+        snapCandidatesRef.current = precomputeSnapLines(
+          store.objects,
+          new Set(targets),
+          store.viewport,
+          store.settings
+        );
 
         pointerStateRef.current = {
           ...createInitialPointerState(),
@@ -361,11 +383,50 @@ export function Stage() {
 
     // 2. Dragging objects
     if (pState.mode === 'dragging') {
-      const dx = worldPt.x - pState.currentWorld.x;
-      const dy = worldPt.y - pState.currentWorld.y;
+      const isSnap = store.settings.isSnapping && !e.ctrlKey && !e.metaKey;
+      const zoom =
+        store.viewport.workMode === 'unlimited'
+          ? store.viewport.ulZoom
+          : store.viewport.zoomLevel;
+
+      let totalDx = worldPt.x - pState.startWorld.x;
+      let totalDy = worldPt.y - pState.startWorld.y;
+
+      let guides: SnapGuide[] = [];
+      if (isSnap && snapCandidatesRef.current && pState.dragTargetIds.length > 0) {
+        const boxes = pState.dragTargetIds
+          .map((id) => pState.initialObjectBoxes.get(id))
+          .filter(Boolean) as (BoundingBox & { rotation: number })[];
+        const union = unionBounds(boxes);
+        if (union) {
+          const projected = {
+            x: union.x + totalDx,
+            y: union.y + totalDy,
+            width: union.width,
+            height: union.height,
+          };
+          const snap = snapMove(projected, snapCandidatesRef.current, 15 / zoom);
+          totalDx += snap.deltaX;
+          totalDy += snap.deltaY;
+          guides = snap.guides;
+        }
+      }
+
+      setOverlayState((prev) => ({ ...prev, guidelines: guides }));
+
+      for (const id of pState.dragTargetIds) {
+        const init = pState.initialObjectBoxes.get(id);
+        const curr = store.objects.find((o) => o.id === id);
+        if (init && curr) {
+          const shiftX = init.x + totalDx - curr.x;
+          const shiftY = init.y + totalDy - curr.y;
+          if (shiftX !== 0 || shiftY !== 0) {
+            store.moveObjects([id], shiftX, shiftY);
+          }
+        }
+      }
       pState.currentScreen = screenPt;
       pState.currentWorld = worldPt;
-      store.moveObjects(pState.dragTargetIds, dx, dy);
       return;
     }
 
@@ -374,6 +435,11 @@ export function Stage() {
       const id = pState.dragTargetIds[0];
       const initial = pState.initialObjectBoxes.get(id);
       if (initial) {
+        const zoom =
+          store.viewport.workMode === 'unlimited'
+            ? store.viewport.ulZoom
+            : store.viewport.zoomLevel;
+
         const dx = worldPt.x - pState.startWorld.x;
         const dy = worldPt.y - pState.startWorld.y;
 
@@ -419,6 +485,23 @@ export function Stage() {
             break;
         }
 
+        let guides: SnapGuide[] = [];
+        const isResizeSnap = store.settings.isResizeSnapping && !e.ctrlKey && !e.metaKey;
+        if (isResizeSnap && snapCandidatesRef.current) {
+          const snapped = snapResize(
+            { x: newX, y: newY, width: newW, height: newH },
+            pState.activeHandle,
+            snapCandidatesRef.current,
+            15 / zoom
+          );
+          newX = snapped.box.x;
+          newY = snapped.box.y;
+          newW = snapped.box.width;
+          newH = snapped.box.height;
+          guides = snapped.guides;
+        }
+
+        setOverlayState((prev) => ({ ...prev, guidelines: guides }));
         store.resizeObject(id, { x: newX, y: newY, width: newW, height: newH });
       }
       return;
@@ -514,11 +597,8 @@ export function Stage() {
 
   const handlePointerUp = () => {
     const store = useSceneStore.getState();
-    const pState = pointerStateRef.current;
-
-    if (pState.mode === 'marquee') {
-      setOverlayState((prev) => ({ ...prev, marquee: null }));
-    }
+    snapCandidatesRef.current = null;
+    setOverlayState((prev) => ({ ...prev, marquee: null, guidelines: [] }));
 
     if (
       pState.mode === 'dragging' ||
