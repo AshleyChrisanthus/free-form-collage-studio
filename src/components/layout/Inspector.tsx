@@ -63,11 +63,11 @@ export function Inspector() {
     return (
       <button
         onClick={() => toggleOpen(true)}
-        className="glass absolute right-3 top-16 z-20 apple-btn apple-btn-icon shadow-md"
-        title="Open Properties Inspector"
+        className="glass absolute left-3 top-3 z-20 apple-btn apple-btn-icon shadow-md"
+        title="Open Canvas & Layout / Properties"
         aria-label="Open Properties Inspector"
       >
-        <ChevronLeft size={16} />
+        <ChevronRight size={16} />
       </button>
     );
   }
@@ -76,11 +76,11 @@ export function Inspector() {
 
   return (
     <aside
-      className="glass absolute right-3 top-16 z-20 flex w-72 flex-col max-h-[calc(100vh-5.5rem)] overflow-hidden rounded-[var(--radius)] shadow-xl text-xs"
+      className="glass absolute left-3 top-3 z-20 flex w-72 flex-col max-h-[calc(100vh-2.5rem)] overflow-hidden rounded-[var(--radius)] shadow-xl text-xs"
       aria-label="Properties Inspector"
     >
       {/* Panel header */}
-      <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-2.5">
+      <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-2.5 flex-shrink-0">
         <div className="flex items-center gap-2 font-semibold">
           <Sliders size={14} className="text-accent" />
           <span>
@@ -99,11 +99,11 @@ export function Inspector() {
           title="Collapse Inspector"
           aria-label="Collapse Inspector"
         >
-          <ChevronRight size={14} />
+          <ChevronLeft size={14} />
         </button>
       </div>
 
-      <div className="overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 overscroll-contain pb-12">
         {/* CASE 1: Single Object Selected */}
         {singleObject && (
           <>

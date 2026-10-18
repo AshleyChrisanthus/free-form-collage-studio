@@ -8,7 +8,6 @@ import {
   LockOpen,
   MousePointer,
   Minus,
-  Layers,
 } from 'lucide-react';
 import { useSceneStore } from '../../store/sceneStore';
 import type { ToolMode } from '../../types/scene';
@@ -19,8 +18,6 @@ export function ToolRail() {
   const tool = useSceneStore((state) => state.tool);
   const setToolMode = useSceneStore((state) => state.setToolMode);
   const setToolLocked = useSceneStore((state) => state.setToolLocked);
-  const layersOpen = useSceneStore((state) => state.ui.layersOpen);
-  const toggleLayers = useSceneStore((state) => state.toggleLayers);
 
   const tools: Array<{
     id: ToolMode;
@@ -70,7 +67,7 @@ export function ToolRail() {
 
   return (
     <aside
-      className="glass absolute left-3 top-16 z-20 flex flex-col items-center gap-1.5 rounded-[var(--radius)] p-2"
+      className="glass absolute top-3 left-1/2 -translate-x-1/2 z-20 flex flex-row items-center gap-1 rounded-[var(--radius)] px-2 py-1 shadow-lg"
       role="toolbar"
       aria-label="Tool Rail"
     >
@@ -93,7 +90,7 @@ export function ToolRail() {
         );
       })}
 
-      <div className="my-1 h-px w-6 bg-[var(--border)]" />
+      <div className="mx-1 h-5 w-px bg-[var(--border)]" />
 
       {/* Import File Button */}
       <button
@@ -104,19 +101,6 @@ export function ToolRail() {
         aria-label="Import Image"
       >
         <ImagePlus size={18} />
-      </button>
-
-      {/* Layers Panel Toggle Button */}
-      <button
-        type="button"
-        className={`apple-btn apple-btn-icon transition-all ${
-          layersOpen ? 'bg-accent/20 text-accent font-semibold' : 'apple-btn-ghost text-fg'
-        }`}
-        onClick={() => toggleLayers()}
-        title="Toggle Layers Panel"
-        aria-label="Toggle Layers Panel"
-      >
-        <Layers size={18} />
       </button>
 
       <input

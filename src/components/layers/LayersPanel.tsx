@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Layers,
-  ChevronLeft,
+  ChevronRight,
   ArrowUpToLine,
   ArrowDownToLine,
   ChevronUp,
@@ -44,7 +44,7 @@ export function LayersPanel() {
     return (
       <button
         onClick={() => toggleLayers(true)}
-        className="glass absolute left-16 top-16 z-20 apple-btn apple-btn-icon shadow-md"
+        className="glass absolute right-3 top-3 z-20 apple-btn apple-btn-icon shadow-md"
         title="Open Layers Panel"
         aria-label="Open Layers Panel"
       >
@@ -101,11 +101,11 @@ export function LayersPanel() {
 
   return (
     <aside
-      className="glass absolute left-16 top-16 z-20 flex w-64 flex-col max-h-[calc(100vh-5.5rem)] overflow-hidden rounded-[var(--radius)] shadow-xl text-xs"
+      className="glass absolute right-3 top-3 z-20 flex w-72 flex-col max-h-[calc(100vh-2.5rem)] overflow-hidden rounded-[var(--radius)] shadow-xl text-xs"
       aria-label="Layers Panel"
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2.5">
+      <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2.5 flex-shrink-0">
         <div className="flex items-center gap-2 font-semibold">
           <Layers size={14} className="text-accent" />
           <span>Layers</span>
@@ -117,12 +117,12 @@ export function LayersPanel() {
           title="Collapse Layers Panel"
           aria-label="Collapse Layers Panel"
         >
-          <ChevronLeft size={14} />
+          <ChevronRight size={14} />
         </button>
       </div>
 
       {/* Layer quick controls toolbar */}
-      <div className="flex items-center justify-between px-2 py-1.5 border-b border-[var(--border)] bg-surface-raised/40">
+      <div className="flex items-center justify-between px-2 py-1.5 border-b border-[var(--border)] bg-surface-raised/40 flex-shrink-0">
         <div className="flex items-center gap-1">
           <button
             onClick={() => bringToFront(selection)}
@@ -187,7 +187,7 @@ export function LayersPanel() {
       </div>
 
       {/* Layer rows list */}
-      <div className="overflow-y-auto p-2 space-y-0.5 flex-1">
+      <div className="overflow-y-auto p-2 space-y-0.5 flex-1 min-h-0 pb-10">
         {objects.length === 0 ? (
           <div className="py-8 text-center text-fg-muted text-[11px]">
             No objects in canvas

@@ -39,19 +39,19 @@ export default function App() {
 
       {/* Main Studio Workspace Stage */}
       <main className="relative flex flex-1 overflow-hidden">
-        {/* Left Tool Rail */}
-        <ToolRail />
+        {/* Canvas & Layout / Properties Inspector (Left Panel) */}
+        <Inspector />
 
-        {/* Collapsible Layers Panel */}
-        <LayersPanel />
+        {/* Top Horizontal Tool Ribbon (Excalidraw style) */}
+        <ToolRail />
 
         {/* Center 3-Layer Canvas Stage */}
         <Stage />
 
-        {/* Right Properties Inspector */}
-        <Inspector />
+        {/* Layers Panel (Right Panel) */}
+        <LayersPanel />
 
-        {/* Floating Zoom & Fit Toolbar */}
+        {/* Floating Zoom & Fit Toolbar (Bottom Center) */}
         <FloatingToolbar />
       </main>
 
