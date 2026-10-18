@@ -135,8 +135,8 @@ export function createRenderer({
         clipRect,
         stageBounds: stage,
         dimExterior: isFraming,
-        background: state.settings.bgColor,
-        transparentBg: state.settings.transparentBg,
+        background: isFraming ? state.settings.bgColor : undefined,
+        transparentBg: isFraming ? state.settings.transparentBg : undefined,
       });
       sceneDirty = false;
     }

@@ -33,7 +33,14 @@ export function Stage() {
   const pointerStateRef = useRef<PointerMachineState>(createInitialPointerState());
   const [cursor, setCursor] = useState<string>('default');
 
-  const viewport = useSceneStore((state) => state.viewport);
+  const workMode = useSceneStore((state) => state.viewport.workMode);
+  const unlimitedTheme = useSceneStore((state) => state.viewport.unlimitedTheme);
+  const ulZoom = useSceneStore((state) => state.viewport.ulZoom);
+  const ulPanX = useSceneStore((state) => state.viewport.ulPanX);
+  const ulPanY = useSceneStore((state) => state.viewport.ulPanY);
+  const zoomLevel = useSceneStore((state) => state.viewport.zoomLevel);
+  const renderOffsetX = useSceneStore((state) => state.viewport.renderOffsetX);
+  const renderOffsetY = useSceneStore((state) => state.viewport.renderOffsetY);
   const selection = useSceneStore((state) => state.selection);
 
   // Keep overlay state in sync with store selection
@@ -508,17 +515,17 @@ export function Stage() {
   };
 
   // Calculate adaptive dot grid CSS background
-  const isUnlimited = viewport.workMode === 'unlimited';
-  const isDark = viewport.unlimitedTheme === 'dark';
-  const dotColor = isDark ? '#334155' : '#cbd5e1';
+  const isUnlimited = workMode === 'unlimited';
+  const isDark = unlimitedTheme === 'dark';
+  const dotColor = isDark ? 'rgba(148, 163, 184, 0.35)' : 'rgba(100, 116, 139, 0.4)';
   const bgColor = isUnlimited ? (isDark ? '#020617' : '#f8fafc') : 'var(--surface-sunken, #090d16)';
 
-  let gridSpacing = 40 * (isUnlimited ? viewport.ulZoom : viewport.zoomLevel);
+  let gridSpacing = 40 * (isUnlimited ? ulZoom : zoomLevel);
   while (gridSpacing < 15) gridSpacing *= 2;
   while (gridSpacing > 80) gridSpacing /= 2;
 
-  const panX = isUnlimited ? viewport.ulPanX : viewport.renderOffsetX;
-  const panY = isUnlimited ? viewport.ulPanY : viewport.renderOffsetY;
+  const panX = isUnlimited ? ulPanX : renderOffsetX;
+  const panY = isUnlimited ? ulPanY : renderOffsetY;
   const bgPosX = ((panX % gridSpacing) + gridSpacing) % gridSpacing;
   const bgPosY = ((panY % gridSpacing) + gridSpacing) % gridSpacing;
 
@@ -530,7 +537,7 @@ export function Stage() {
         cursor,
         backgroundColor: bgColor,
         backgroundImage: isUnlimited
-          ? `radial-gradient(circle, ${dotColor} 1.2px, transparent 1.7px)`
+          ? `radial-gradient(${dotColor} 1.25px, transparent 1.25px)`
           : 'none',
         backgroundSize: `${gridSpacing}px ${gridSpacing}px`,
         backgroundPosition: `${bgPosX}px ${bgPosY}px`,
