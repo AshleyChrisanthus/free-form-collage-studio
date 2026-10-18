@@ -13,6 +13,8 @@ import {
   computeCursorZoom,
   clampFramingZoom,
 } from './viewport';
+import { ingestFiles, pasteFromClipboard } from '../import/ingest';
+import { Upload } from 'lucide-react';
 
 export function Stage() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -32,6 +34,7 @@ export function Stage() {
 
   const pointerStateRef = useRef<PointerMachineState>(createInitialPointerState());
   const [cursor, setCursor] = useState<string>('default');
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const workMode = useSceneStore((state) => state.viewport.workMode);
   const unlimitedTheme = useSceneStore((state) => state.viewport.unlimitedTheme);
@@ -99,6 +102,25 @@ export function Stage() {
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+    };
+  }, []);
+
+  // Global paste handler for image ingestion
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || (activeEl as HTMLElement).isContentEditable)
+      ) {
+        return;
+      }
+      void pasteFromClipboard(e);
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => {
+      window.removeEventListener('paste', handlePaste);
     };
   }, []);
 
@@ -529,6 +551,37 @@ export function Stage() {
   const bgPosX = ((panX % gridSpacing) + gridSpacing) % gridSpacing;
   const bgPosY = ((panY % gridSpacing) + gridSpacing) % gridSpacing;
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragOver) setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const renderer = rendererRef.current;
+      const container = containerRef.current;
+      let dropWorldPoint: Point | undefined;
+
+      if (renderer && container) {
+        const rect = container.getBoundingClientRect();
+        dropWorldPoint = renderer.screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+      }
+
+      void ingestFiles(Array.from(e.dataTransfer.files), dropWorldPoint);
+    }
+  };
+
   return (
     <div
       ref={containerRef}
@@ -546,6 +599,9 @@ export function Stage() {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
       {/* Layer 2: Scene Canvas */}
       <canvas
@@ -558,6 +614,19 @@ export function Stage() {
         ref={overlayCanvasRef}
         className="absolute inset-0 pointer-events-none"
       />
+
+      {/* Drag & Drop Visual Glass Overlay */}
+      {isDragOver && (
+        <div className="absolute inset-4 z-40 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-accent bg-[var(--surface)]/80 backdrop-blur-md pointer-events-none transition-all duration-150">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/20 text-accent mb-3 animate-pulse">
+            <Upload size={32} />
+          </div>
+          <span className="text-base font-semibold text-fg">Drop Images to Import</span>
+          <span className="text-xs text-fg-muted mt-1">
+            Supports PNG, JPEG, WebP, AVIF, GIF, SVG, TIFF, and JPEG XL (.jxl)
+          </span>
+        </div>
+      )}
     </div>
   );
 }

@@ -11,9 +11,7 @@ import {
 } from 'lucide-react';
 import { useSceneStore } from '../../store/sceneStore';
 import type { ToolMode } from '../../types/scene';
-import { generateId } from '../../lib/id';
-import { db } from '../../db/db';
-import { assetCache } from '../../canvas/assetCache';
+import { ingestFiles } from '../../import/ingest';
 
 export function ToolRail() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -65,71 +63,7 @@ export function ToolRail() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      try {
-        const assetId = generateId();
-        const bitmap = await createImageBitmap(file);
-
-        // Store asset in Dexie
-        await db.assets.put({
-          id: assetId,
-          workspaceId: 'default',
-          mimeType: file.type || 'image/png',
-          blob: file,
-          width: bitmap.width,
-          height: bitmap.height,
-          createdAt: Date.now(),
-        });
-
-        // Cache decoded bitmap
-        assetCache.setBitmap(assetId, bitmap);
-
-        // Position on canvas
-        const viewport = useSceneStore.getState().viewport;
-        const cx =
-          viewport.workMode === 'unlimited'
-            ? -viewport.ulPanX / viewport.ulZoom + 200 + i * 30
-            : 100 + i * 30;
-        const cy =
-          viewport.workMode === 'unlimited'
-            ? -viewport.ulPanY / viewport.ulZoom + 150 + i * 30
-            : 100 + i * 30;
-
-        // Scale to reasonable default width (max 500px)
-        const maxWidth = 500;
-        const scale = bitmap.width > maxWidth ? maxWidth / bitmap.width : 1;
-        const width = Math.round(bitmap.width * scale);
-        const height = Math.round(bitmap.height * scale);
-
-        addObject(
-          {
-            id: generateId(),
-            type: 'image',
-            assetId,
-            x: cx,
-            y: cy,
-            width,
-            height,
-            origWidth: bitmap.width,
-            origHeight: bitmap.height,
-            mimeType: file.type || 'image/png',
-            groupId: null,
-            opacity: 1,
-            rotation: 0,
-            flipH: false,
-            flipV: false,
-          },
-          'Import Image'
-        );
-
-        showToast(`Imported ${file.name}`, 'success');
-      } catch (err) {
-        console.error('Failed to import image:', err);
-        showToast(`Failed to import ${file.name}`, 'error');
-      }
-    }
-
+    await ingestFiles(Array.from(files));
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -174,7 +108,7 @@ export function ToolRail() {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*,.jxl,.tiff"
+        accept="image/*,.jxl,.tif,.tiff,.avif,.svg"
         multiple
         hidden
         onChange={handleFileChange}
