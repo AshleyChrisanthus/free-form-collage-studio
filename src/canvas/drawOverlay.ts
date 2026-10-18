@@ -34,36 +34,76 @@ export interface OverlayState {
   lassoPoints: Point[] | null;
 }
 
+/**
+ * Computes CSS resize cursor rotated by object angle.
+ */
+export function getRotatedCursor(baseType: ResizeHandleType, angleDeg: number): string {
+  if (baseType === 'rot') return 'crosshair';
+
+  let baseAngle = 0;
+  switch (baseType) {
+    case 'tc':
+    case 'bc':
+      baseAngle = 0;
+      break;
+    case 'tr':
+    case 'bl':
+      baseAngle = 45;
+      break;
+    case 'mr':
+    case 'ml':
+      baseAngle = 90;
+      break;
+    case 'br':
+    case 'tl':
+      baseAngle = 135;
+      break;
+  }
+
+  const effectiveAngle = Math.round(((baseAngle + angleDeg) % 180 + 180) % 180);
+
+  if (effectiveAngle < 22.5 || effectiveAngle >= 157.5) {
+    return 'ns-resize';
+  } else if (effectiveAngle < 67.5) {
+    return 'nesw-resize';
+  } else if (effectiveAngle < 112.5) {
+    return 'ew-resize';
+  } else {
+    return 'nwse-resize';
+  }
+}
+
 export function getObjectResizeHandles(
-  obj: CanvasObject,
+  obj: { x: number; y: number; width: number; height: number; rotation?: number },
   zoom: number
 ): HandlePosition[] {
   const width = Math.max(1, obj.width);
   const height = Math.max(1, obj.height);
   const cx = obj.x + width / 2;
   const cy = obj.y + height / 2;
-  const rotRad = ((obj.rotation || 0) * Math.PI) / 180;
+  const rot = obj.rotation || 0;
+  const rotRad = (rot * Math.PI) / 180;
   const cos = Math.cos(rotRad);
   const sin = Math.sin(rotRad);
 
-  const localHandles: Array<{ type: ResizeHandleType; lx: number; ly: number; cursor: string }> = [
-    { type: 'tl', lx: -width / 2, ly: -height / 2, cursor: 'nwse-resize' },
-    { type: 'tc', lx: 0, ly: -height / 2, cursor: 'ns-resize' },
-    { type: 'tr', lx: width / 2, ly: -height / 2, cursor: 'nesw-resize' },
-    { type: 'ml', lx: -width / 2, ly: 0, cursor: 'ew-resize' },
-    { type: 'mr', lx: width / 2, ly: 0, cursor: 'ew-resize' },
-    { type: 'bl', lx: -width / 2, ly: height / 2, cursor: 'nesw-resize' },
-    { type: 'bc', lx: 0, ly: height / 2, cursor: 'ns-resize' },
-    { type: 'br', lx: width / 2, ly: height / 2, cursor: 'nwse-resize' },
+  const localHandles: Array<{ type: ResizeHandleType; lx: number; ly: number }> = [
+    { type: 'tl', lx: -width / 2, ly: -height / 2 },
+    { type: 'tc', lx: 0, ly: -height / 2 },
+    { type: 'tr', lx: width / 2, ly: -height / 2 },
+    { type: 'ml', lx: -width / 2, ly: 0 },
+    { type: 'mr', lx: width / 2, ly: 0 },
+    { type: 'bl', lx: -width / 2, ly: height / 2 },
+    { type: 'bc', lx: 0, ly: height / 2 },
+    { type: 'br', lx: width / 2, ly: height / 2 },
     // Rotation handle 24px above top center
-    { type: 'rot', lx: 0, ly: -height / 2 - 24 / zoom, cursor: 'crosshair' },
+    { type: 'rot', lx: 0, ly: -height / 2 - 24 / zoom },
   ];
 
   return localHandles.map((h) => ({
     type: h.type,
     x: cx + (h.lx * cos - h.ly * sin),
     y: cy + (h.lx * sin + h.ly * cos),
-    cursor: h.cursor,
+    cursor: getRotatedCursor(h.type, rot),
   }));
 }
 
@@ -107,7 +147,7 @@ export function drawOverlay(
     ctx.setLineDash([4 / zoom, 4 / zoom]);
     ctx.strokeRect(-width / 2, -height / 2, width, height);
 
-    // Stalk line connecting rotation handle to top-center
+    // Stalk line connecting rotation handle to top-center (for single selection)
     if (selectedObjs.length === 1) {
       ctx.beginPath();
       ctx.moveTo(0, -height / 2);
@@ -121,36 +161,42 @@ export function drawOverlay(
     ctx.restore();
   }
 
-  // 3. Handles for single selection
+  // 3. Handles (for single object or combined multi-selection box)
   if (selectedObjs.length === 1) {
     const handles = getObjectResizeHandles(selectedObjs[0], zoom);
-    const handleRadius = Math.max(3.5, 4.5 / zoom);
+    renderHandles(ctx, handles, zoom);
+  } else if (selectedObjs.length > 1) {
+    // Combined multi-selection bounding box & handles
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
 
-    for (const h of handles) {
-      ctx.save();
-      ctx.beginPath();
-      if (h.type === 'rot') {
-        ctx.arc(h.x, h.y, handleRadius + 1 / zoom, 0, Math.PI * 2);
-        ctx.fillStyle = '#3b82f6';
-        ctx.fill();
-        ctx.lineWidth = 1.5 / zoom;
-        ctx.strokeStyle = '#ffffff';
-        ctx.stroke();
-      } else {
-        ctx.rect(
-          h.x - handleRadius,
-          h.y - handleRadius,
-          handleRadius * 2,
-          handleRadius * 2
-        );
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
-        ctx.lineWidth = 1.5 / zoom;
-        ctx.strokeStyle = '#3b82f6';
-        ctx.stroke();
-      }
-      ctx.restore();
+    for (const obj of selectedObjs) {
+      minX = Math.min(minX, obj.x);
+      minY = Math.min(minY, obj.y);
+      maxX = Math.max(maxX, obj.x + obj.width);
+      maxY = Math.max(maxY, obj.y + obj.height);
     }
+
+    const multiBox = {
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY,
+      rotation: 0,
+    };
+
+    // Outer bounding frame for multi-selection
+    ctx.save();
+    ctx.strokeStyle = '#3b82f6';
+    ctx.lineWidth = 1 / zoom;
+    ctx.setLineDash([6 / zoom, 6 / zoom]);
+    ctx.strokeRect(multiBox.x, multiBox.y, multiBox.width, multiBox.height);
+    ctx.restore();
+
+    const handles = getObjectResizeHandles(multiBox, zoom).filter((h) => h.type !== 'rot');
+    renderHandles(ctx, handles, zoom);
   }
 
   // 4. Marquee box
@@ -243,4 +289,38 @@ function drawFramingStageBounds(
   ctx.lineWidth = 1.5;
   ctx.strokeRect(stage.x, stage.y, stage.width, stage.height);
   ctx.restore();
+}
+
+function renderHandles(
+  ctx: CanvasRenderingContext2D,
+  handles: HandlePosition[],
+  zoom: number
+) {
+  const handleRadius = Math.max(3.5, 4.5 / zoom);
+
+  for (const h of handles) {
+    ctx.save();
+    ctx.beginPath();
+    if (h.type === 'rot') {
+      ctx.arc(h.x, h.y, handleRadius + 1 / zoom, 0, Math.PI * 2);
+      ctx.fillStyle = '#3b82f6';
+      ctx.fill();
+      ctx.lineWidth = 1.5 / zoom;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+    } else {
+      ctx.rect(
+        h.x - handleRadius,
+        h.y - handleRadius,
+        handleRadius * 2,
+        handleRadius * 2
+      );
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.lineWidth = 1.5 / zoom;
+      ctx.strokeStyle = '#3b82f6';
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 }

@@ -21,6 +21,7 @@ import {
   type CandidateLines,
   type SnapGuide,
 } from '../snapping/snap';
+import { computeResize, computeMultiResize } from './transforms';
 import { Upload } from 'lucide-react';
 
 export function Stage() {
@@ -263,17 +264,38 @@ export function Stage() {
           handleHit.handle === 'rot' ? 'Rotate Object' : 'Resize Object'
         );
         const boxes = new Map<string, BoundingBox & { rotation: number }>();
-        boxes.set(handleHit.obj.id, {
-          x: handleHit.obj.x,
-          y: handleHit.obj.y,
-          width: handleHit.obj.width,
-          height: handleHit.obj.height,
-          rotation: handleHit.obj.rotation,
-        });
+        if (handleHit.isMulti) {
+          boxes.set('__multi__', {
+            x: handleHit.obj.x,
+            y: handleHit.obj.y,
+            width: handleHit.obj.width,
+            height: handleHit.obj.height,
+            rotation: 0,
+          });
+          for (const obj of store.objects) {
+            if (store.selection.includes(obj.id)) {
+              boxes.set(obj.id, {
+                x: obj.x,
+                y: obj.y,
+                width: obj.width,
+                height: obj.height,
+                rotation: obj.rotation,
+              });
+            }
+          }
+        } else {
+          boxes.set(handleHit.obj.id, {
+            x: handleHit.obj.x,
+            y: handleHit.obj.y,
+            width: handleHit.obj.width,
+            height: handleHit.obj.height,
+            rotation: handleHit.obj.rotation,
+          });
+        }
 
         snapCandidatesRef.current = precomputeSnapLines(
           store.objects,
-          new Set([handleHit.obj.id]),
+          new Set(handleHit.isMulti ? store.selection : [handleHit.obj.id]),
           store.viewport,
           store.settings
         );
@@ -286,7 +308,7 @@ export function Stage() {
           currentScreen: screenPt,
           currentWorld: worldPt,
           activeHandle: handleHit.handle,
-          dragTargetIds: [handleHit.obj.id],
+          dragTargetIds: handleHit.isMulti ? [...store.selection] : [handleHit.obj.id],
           initialObjectBoxes: boxes,
         };
         setCursor(handleHit.cursor);
@@ -431,78 +453,65 @@ export function Stage() {
     }
 
     // 3. Resizing object
-    if (pState.mode === 'resizing' && pState.activeHandle && pState.dragTargetIds[0]) {
-      const id = pState.dragTargetIds[0];
-      const initial = pState.initialObjectBoxes.get(id);
-      if (initial) {
-        const zoom =
-          store.viewport.workMode === 'unlimited'
-            ? store.viewport.ulZoom
-            : store.viewport.zoomLevel;
+    if (pState.mode === 'resizing' && pState.activeHandle) {
+      const isMulti = pState.dragTargetIds.length > 1 || pState.initialObjectBoxes.has('__multi__');
+      const isCorner = ['tl', 'tr', 'bl', 'br'].includes(pState.activeHandle);
+      const preserveAspect = isCorner ? !e.shiftKey : false;
+      const fromCenter = e.altKey;
 
-        const dx = worldPt.x - pState.startWorld.x;
-        const dy = worldPt.y - pState.startWorld.y;
+      const dx = worldPt.x - pState.startWorld.x;
+      const dy = worldPt.y - pState.startWorld.y;
 
-        let newX = initial.x;
-        let newY = initial.y;
-        let newW = initial.width;
-        let newH = initial.height;
+      const zoom =
+        store.viewport.workMode === 'unlimited'
+          ? store.viewport.ulZoom
+          : store.viewport.zoomLevel;
 
-        switch (pState.activeHandle) {
-          case 'br':
-            newW = Math.max(20, initial.width + dx);
-            newH = Math.max(20, initial.height + dy);
-            break;
-          case 'bl':
-            newW = Math.max(20, initial.width - dx);
-            newH = Math.max(20, initial.height + dy);
-            newX = initial.x + initial.width - newW;
-            break;
-          case 'tr':
-            newW = Math.max(20, initial.width + dx);
-            newH = Math.max(20, initial.height - dy);
-            newY = initial.y + initial.height - newH;
-            break;
-          case 'tl':
-            newW = Math.max(20, initial.width - dx);
-            newH = Math.max(20, initial.height - dy);
-            newX = initial.x + initial.width - newW;
-            newY = initial.y + initial.height - newH;
-            break;
-          case 'mr':
-            newW = Math.max(20, initial.width + dx);
-            break;
-          case 'ml':
-            newW = Math.max(20, initial.width - dx);
-            newX = initial.x + initial.width - newW;
-            break;
-          case 'bc':
-            newH = Math.max(20, initial.height + dy);
-            break;
-          case 'tc':
-            newH = Math.max(20, initial.height - dy);
-            newY = initial.y + initial.height - newH;
-            break;
+      if (isMulti) {
+        const resizedMap = computeMultiResize(
+          pState.initialObjectBoxes,
+          pState.dragTargetIds,
+          pState.activeHandle,
+          dx,
+          dy,
+          preserveAspect,
+          fromCenter
+        );
+        for (const id of pState.dragTargetIds) {
+          const newBox = resizedMap.get(id);
+          if (newBox) {
+            store.resizeObject(id, newBox);
+          }
         }
-
-        let guides: SnapGuide[] = [];
-        const isResizeSnap = store.settings.isResizeSnapping && !e.ctrlKey && !e.metaKey;
-        if (isResizeSnap && snapCandidatesRef.current) {
-          const snapped = snapResize(
-            { x: newX, y: newY, width: newW, height: newH },
+      } else if (pState.dragTargetIds[0]) {
+        const id = pState.dragTargetIds[0];
+        const initial = pState.initialObjectBoxes.get(id);
+        if (initial) {
+          let newBox = computeResize(
+            initial,
             pState.activeHandle,
-            snapCandidatesRef.current,
-            15 / zoom
+            dx,
+            dy,
+            preserveAspect,
+            fromCenter
           );
-          newX = snapped.box.x;
-          newY = snapped.box.y;
-          newW = snapped.box.width;
-          newH = snapped.box.height;
-          guides = snapped.guides;
-        }
 
-        setOverlayState((prev) => ({ ...prev, guidelines: guides }));
-        store.resizeObject(id, { x: newX, y: newY, width: newW, height: newH });
+          let guides: SnapGuide[] = [];
+          const isResizeSnap = store.settings.isResizeSnapping && !e.ctrlKey && !e.metaKey;
+          if (isResizeSnap && snapCandidatesRef.current) {
+            const snapped = snapResize(
+              newBox,
+              pState.activeHandle,
+              snapCandidatesRef.current,
+              15 / zoom
+            );
+            newBox = snapped.box;
+            guides = snapped.guides;
+          }
+
+          setOverlayState((prev) => ({ ...prev, guidelines: guides }));
+          store.resizeObject(id, newBox);
+        }
       }
       return;
     }
@@ -519,6 +528,7 @@ export function Stage() {
         if (e.shiftKey) {
           angleDeg = Math.round(angleDeg / 15) * 15; // 15° snap
         }
+        angleDeg = Math.round(((angleDeg % 360) + 360) % 360);
         store.setRotation(id, angleDeg);
       }
       return;

@@ -302,6 +302,18 @@ export const useSceneStore = create<SceneState>()(
         mutateWithHistory(label, (draft) => {
           draft.objects = draft.objects.filter((o) => !setIds.has(o.id));
           draft.selection = draft.selection.filter((id) => !setIds.has(id));
+
+          // Clear bindings on remaining lines pointing to deleted objects
+          for (const obj of draft.objects) {
+            if (isLine(obj)) {
+              if (obj.startBinding && setIds.has(obj.startBinding.elementId)) {
+                obj.startBinding = null;
+              }
+              if (obj.endBinding && setIds.has(obj.endBinding.elementId)) {
+                obj.endBinding = null;
+              }
+            }
+          }
         });
       },
 
@@ -317,7 +329,7 @@ export const useSceneStore = create<SceneState>()(
       moveObjects: (ids: string[], dx: number, dy: number) => {
         if (ids.length === 0 || (dx === 0 && dy === 0)) return;
         const idSet = new Set(ids);
-        set((draft) => {
+        mutateWithHistory('Move Objects', (draft) => {
           // Also update bound line endpoints
           const movedObjects = new Map<string, CanvasObject>();
 
@@ -362,7 +374,7 @@ export const useSceneStore = create<SceneState>()(
       },
 
       resizeObject: (id: string, box: BoundingBox) => {
-        set((draft) => {
+        mutateWithHistory('Resize Object', (draft) => {
           const obj = draft.objects.find((o) => o.id === id);
           if (obj) {
             obj.x = box.x;
@@ -378,7 +390,7 @@ export const useSceneStore = create<SceneState>()(
         let norm = rotationDeg % 360;
         if (norm > 180) norm -= 360;
         if (norm < -180) norm += 360;
-        set((draft) => {
+        mutateWithHistory('Rotate Object', (draft) => {
           const obj = draft.objects.find((o) => o.id === id);
           if (obj) {
             obj.rotation = Math.round(norm * 10) / 10;
@@ -390,10 +402,47 @@ export const useSceneStore = create<SceneState>()(
         if (ids.length === 0) return;
         const idSet = new Set(ids);
         mutateWithHistory('Flip', (draft) => {
+          const selected = draft.objects.filter((o) => idSet.has(o.id));
+          if (selected.length === 0) return;
+
+          // Compute selection centroid
+          let minX = Infinity;
+          let minY = Infinity;
+          let maxX = -Infinity;
+          let maxY = -Infinity;
+
+          for (const obj of selected) {
+            minX = Math.min(minX, obj.x);
+            minY = Math.min(minY, obj.y);
+            maxX = Math.max(maxX, obj.x + obj.width);
+            maxY = Math.max(maxY, obj.y + obj.height);
+          }
+
+          const cx = (minX + maxX) / 2;
+          const cy = (minY + maxY) / 2;
+
           for (const obj of draft.objects) {
             if (idSet.has(obj.id)) {
-              if (horizontal) obj.flipH = !obj.flipH;
-              if (vertical) obj.flipV = !obj.flipV;
+              if (horizontal) {
+                obj.flipH = !obj.flipH;
+                obj.x = Math.round(2 * cx - obj.x - obj.width);
+                if (isLine(obj)) {
+                  obj.points = obj.points.map((p) => ({
+                    x: Math.round(2 * cx - p.x),
+                    y: p.y,
+                  }));
+                }
+              }
+              if (vertical) {
+                obj.flipV = !obj.flipV;
+                obj.y = Math.round(2 * cy - obj.y - obj.height);
+                if (isLine(obj)) {
+                  obj.points = obj.points.map((p) => ({
+                    x: p.x,
+                    y: Math.round(2 * cy - p.y),
+                  }));
+                }
+              }
             }
           }
         });
@@ -401,8 +450,8 @@ export const useSceneStore = create<SceneState>()(
 
       setOpacity: (ids: string[], opacity: number) => {
         const clamped = clamp(opacity, 0, 1);
-        set((draft) => {
-          const idSet = new Set(ids);
+        const idSet = new Set(ids);
+        mutateWithHistory('Set Opacity', (draft) => {
           for (const obj of draft.objects) {
             if (idSet.has(obj.id)) {
               obj.opacity = clamped;
@@ -415,22 +464,59 @@ export const useSceneStore = create<SceneState>()(
         if (ids.length === 0) return;
         const idSet = new Set(ids);
         const clones: CanvasObject[] = [];
+        const oldToNewId = new Map<string, string>();
+        const oldToNewGroup = new Map<number, number>();
 
         mutateWithHistory('Duplicate', (draft) => {
+          // Pre-generate new IDs
           for (const obj of draft.objects) {
             if (idSet.has(obj.id)) {
-              const clone = structuredClone(obj);
-              clone.id = generateId();
+              const newId = generateId();
+              oldToNewId.set(obj.id, newId);
+              if (obj.groupId !== null && !oldToNewGroup.has(obj.groupId)) {
+                draft.groupCounter += 1;
+                oldToNewGroup.set(obj.groupId, draft.groupCounter);
+              }
+            }
+          }
+
+          for (const obj of draft.objects) {
+            if (idSet.has(obj.id)) {
+              const clone = JSON.parse(JSON.stringify(obj)) as CanvasObject;
+              clone.id = oldToNewId.get(obj.id)!;
               clone.x += 20;
               clone.y += 20;
+
+              if (clone.groupId !== null && oldToNewGroup.has(clone.groupId)) {
+                clone.groupId = oldToNewGroup.get(clone.groupId)!;
+              }
+
               if (isLine(clone)) {
                 clone.points = clone.points.map((p) => ({ x: p.x + 20, y: p.y + 20 }));
-                clone.startBinding = null;
-                clone.endBinding = null;
+                // Remap bindings if target was also duplicated, otherwise drop
+                if (clone.startBinding && oldToNewId.has(clone.startBinding.elementId)) {
+                  clone.startBinding = {
+                    ...clone.startBinding,
+                    elementId: oldToNewId.get(clone.startBinding.elementId)!,
+                  };
+                } else {
+                  clone.startBinding = null;
+                }
+
+                if (clone.endBinding && oldToNewId.has(clone.endBinding.elementId)) {
+                  clone.endBinding = {
+                    ...clone.endBinding,
+                    elementId: oldToNewId.get(clone.endBinding.elementId)!,
+                  };
+                } else {
+                  clone.endBinding = null;
+                }
               }
+
               clones.push(clone);
             }
           }
+
           draft.objects.push(...clones);
           draft.selection = clones.map((c) => c.id);
         });

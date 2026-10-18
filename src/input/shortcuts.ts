@@ -192,7 +192,7 @@ export const SHORTCUTS: ShortcutDefinition[] = [
     },
   },
 
-  // Nudge
+  // Nudge (coalesced into single undo step with 300ms debounce)
   {
     key: 'ArrowLeft',
     description: 'Nudge 1px left (Shift: 10px)',
@@ -200,8 +200,7 @@ export const SHORTCUTS: ShortcutDefinition[] = [
     action: (e) => {
       e.preventDefault();
       const delta = e.shiftKey ? 10 : 1;
-      const sel = useSceneStore.getState().selection;
-      useSceneStore.getState().moveObjects(sel, -delta, 0);
+      performNudge(-delta, 0);
     },
   },
   {
@@ -211,8 +210,7 @@ export const SHORTCUTS: ShortcutDefinition[] = [
     action: (e) => {
       e.preventDefault();
       const delta = e.shiftKey ? 10 : 1;
-      const sel = useSceneStore.getState().selection;
-      useSceneStore.getState().moveObjects(sel, delta, 0);
+      performNudge(delta, 0);
     },
   },
   {
@@ -222,8 +220,7 @@ export const SHORTCUTS: ShortcutDefinition[] = [
     action: (e) => {
       e.preventDefault();
       const delta = e.shiftKey ? 10 : 1;
-      const sel = useSceneStore.getState().selection;
-      useSceneStore.getState().moveObjects(sel, 0, -delta);
+      performNudge(0, -delta);
     },
   },
   {
@@ -233,11 +230,31 @@ export const SHORTCUTS: ShortcutDefinition[] = [
     action: (e) => {
       e.preventDefault();
       const delta = e.shiftKey ? 10 : 1;
-      const sel = useSceneStore.getState().selection;
-      useSceneStore.getState().moveObjects(sel, 0, delta);
+      performNudge(0, delta);
     },
   },
 ];
+
+let nudgeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function performNudge(dx: number, dy: number): void {
+  const store = useSceneStore.getState();
+  const sel = store.selection;
+  if (sel.length === 0) return;
+
+  if (!nudgeDebounceTimer) {
+    store.beginTransaction('Nudge');
+  } else {
+    clearTimeout(nudgeDebounceTimer);
+  }
+
+  store.moveObjects(sel, dx, dy);
+
+  nudgeDebounceTimer = setTimeout(() => {
+    useSceneStore.getState().commitTransaction();
+    nudgeDebounceTimer = null;
+  }, 300);
+}
 
 /**
  * Global keyboard event listener handler.

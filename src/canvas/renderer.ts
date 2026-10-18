@@ -186,11 +186,17 @@ export function createRenderer({
   animFrameId = requestAnimationFrame(render);
 
   const hitTest = (worldPt: Point): CanvasObject | null => {
-    const objects = useSceneStore.getState().objects;
+    const state = useSceneStore.getState();
+    const objects = state.objects;
+    const zoom =
+      state.viewport.workMode === 'unlimited'
+        ? state.viewport.ulZoom
+        : state.viewport.zoomLevel;
+
     // Iterate in reverse (front to back)
     for (let i = objects.length - 1; i >= 0; i--) {
       const obj = objects[i];
-      if (pointInObject(worldPt, obj)) {
+      if (pointInObject(worldPt, obj, zoom)) {
         return obj;
       }
     }
@@ -200,22 +206,66 @@ export function createRenderer({
   const hitTestHandle = (
     worldPt: Point,
     zoom: number
-  ): { obj: CanvasObject; handle: ResizeHandleType; cursor: string } | null => {
+  ): {
+    obj: { id: string; x: number; y: number; width: number; height: number; rotation: number };
+    handle: ResizeHandleType;
+    cursor: string;
+    isMulti?: boolean;
+  } | null => {
     const state = useSceneStore.getState();
-    if (state.selection.length !== 1) return null;
+    if (state.selection.length === 0) return null;
 
-    const obj = state.objects.find((o) => o.id === state.selection[0]);
-    if (!obj) return null;
+    if (state.selection.length === 1) {
+      const obj = state.objects.find((o) => o.id === state.selection[0]);
+      if (!obj) return null;
 
-    const handles = getObjectResizeHandles(obj, zoom);
+      const handles = getObjectResizeHandles(obj, zoom);
+      const hitRadius = Math.max(8, 10 / zoom);
+
+      for (const h of handles) {
+        const dist = Math.hypot(worldPt.x - h.x, worldPt.y - h.y);
+        if (dist <= hitRadius) {
+          return { obj, handle: h.type, cursor: h.cursor };
+        }
+      }
+      return null;
+    }
+
+    // Multi-selection bounding box handles
+    const selected = state.objects.filter((o) => state.selection.includes(o.id));
+    if (selected.length === 0) return null;
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (const o of selected) {
+      minX = Math.min(minX, o.x);
+      minY = Math.min(minY, o.y);
+      maxX = Math.max(maxX, o.x + o.width);
+      maxY = Math.max(maxY, o.y + o.height);
+    }
+
+    const multiBox = {
+      id: '__multi__',
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY,
+      rotation: 0,
+    };
+
+    const handles = getObjectResizeHandles(multiBox, zoom).filter((h) => h.type !== 'rot');
     const hitRadius = Math.max(8, 10 / zoom);
 
     for (const h of handles) {
       const dist = Math.hypot(worldPt.x - h.x, worldPt.y - h.y);
       if (dist <= hitRadius) {
-        return { obj, handle: h.type, cursor: h.cursor };
+        return { obj: multiBox, handle: h.type, cursor: h.cursor, isMulti: true };
       }
     }
+
     return null;
   };
 

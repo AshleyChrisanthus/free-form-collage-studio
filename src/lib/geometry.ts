@@ -126,9 +126,48 @@ export function unionBounds(objs: BaseCanvasObject[]): BoundingBox | null {
 }
 
 /**
+ * Perpendicular distance from point p to line segment (a, b).
+ */
+export function distanceToSegment(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+
+  // Project point onto segment, clamped to [0, 1]
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq));
+  const projX = a.x + t * dx;
+  const projY = a.y + t * dy;
+  return Math.hypot(p.x - projX, p.y - projY);
+}
+
+/**
+ * Test if point is near a line or arrow object within stroke tolerance.
+ */
+export function pointNearLine(pt: Point, line: { points: Point[]; strokeWidth: number }, zoom = 1): boolean {
+  const tolerance = Math.max(6, line.strokeWidth / 2 + 4) / zoom;
+  const points = line.points;
+  if (!points || points.length === 0) return false;
+  if (points.length === 1) {
+    return Math.hypot(pt.x - points[0].x, pt.y - points[0].y) <= tolerance;
+  }
+
+  for (let i = 0; i < points.length - 1; i++) {
+    if (distanceToSegment(pt, points[i], points[i + 1]) <= tolerance) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Test if a point is inside an object, taking object rotation into account.
  */
-export function pointInObject(pt: Point, obj: CanvasObject): boolean {
+export function pointInObject(pt: Point, obj: CanvasObject, zoom = 1): boolean {
+  if (obj.type === 'line') {
+    return pointNearLine(pt, obj, zoom);
+  }
+
   const width = Math.max(1, obj.width);
   const height = Math.max(1, obj.height);
   const cx = obj.x + width / 2;
