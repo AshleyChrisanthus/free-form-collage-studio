@@ -55,6 +55,8 @@ export function Stage() {
     magneticAnchors: null,
     magneticLivePath: null,
   });
+  const overlayStateRef = useRef<OverlayState>(overlayState);
+  overlayStateRef.current = overlayState;
 
   const cropSessionRef = useRef<{
     targetId: string | null;
@@ -109,7 +111,9 @@ export function Stage() {
       container: containerRef.current,
       sceneCanvas: sceneCanvasRef.current,
       overlayCanvas: overlayCanvasRef.current,
-      getOverlayState: () => overlayState,
+      // Read through a ref: this effect runs once, so capturing `overlayState`
+      // directly would freeze the renderer on the initial (empty) overlay.
+      getOverlayState: () => overlayStateRef.current,
     });
 
     rendererRef.current = renderer;
