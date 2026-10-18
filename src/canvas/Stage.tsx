@@ -24,6 +24,18 @@ import {
 import { computeResize, computeMultiResize } from './transforms';
 import { ContextMenu } from '../components/canvas/ContextMenu';
 import { Upload } from 'lucide-react';
+import { isImage } from '../types/guards';
+import type { ImageObject } from '../types/scene';
+import { worldToLocal, localToWorld, clampRectToImage } from '../crop/geometry';
+import { applyCrop } from '../crop/applyCrop';
+import {
+  initScissorsSession,
+  findScissorsPath,
+  snapAnchorPoint,
+  smoothLassoPolygon,
+  type IntelligentScissorsSession,
+} from '../crop/scissors';
+import { getImageDataFromAsset } from '../ai/bgRemoval';
 
 export function Stage() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -38,7 +50,28 @@ export function Stage() {
     guidelines: [],
     hoveredBinding: null,
     cropRect: null,
+    cropTargetId: null,
     lassoPoints: null,
+    magneticAnchors: null,
+    magneticLivePath: null,
+  });
+
+  const cropSessionRef = useRef<{
+    targetId: string | null;
+    rectStartLocal: Point | null;
+    rectCurrentLocal: BoundingBox | null;
+    freeformPointsLocal: Point[];
+    magneticSession: IntelligentScissorsSession | null;
+    magneticAnchorsLocal: Point[];
+    magneticRadius: number;
+  }>({
+    targetId: null,
+    rectStartLocal: null,
+    rectCurrentLocal: null,
+    freeformPointsLocal: [],
+    magneticSession: null,
+    magneticAnchorsLocal: [],
+    magneticRadius: 8,
   });
 
   const pointerStateRef = useRef<PointerMachineState>(createInitialPointerState());
@@ -139,6 +172,158 @@ export function Stage() {
     };
   }, []);
 
+  const toolMode = useSceneStore((state) => state.tool.mode);
+
+  // Sync crop session when entering or leaving crop modes
+  useEffect(() => {
+    const isCropMode =
+      toolMode === 'crop_rect' ||
+      toolMode === 'crop_freeform' ||
+      toolMode === 'crop_magnetic';
+
+    if (!isCropMode) {
+      cropSessionRef.current = {
+        targetId: null,
+        rectStartLocal: null,
+        rectCurrentLocal: null,
+        freeformPointsLocal: [],
+        magneticSession: null,
+        magneticAnchorsLocal: [],
+        magneticRadius: 8,
+      };
+      setOverlayState((prev) => ({
+        ...prev,
+        cropRect: null,
+        cropTargetId: null,
+        lassoPoints: null,
+        magneticAnchors: null,
+        magneticLivePath: null,
+      }));
+      return;
+    }
+
+    const store = useSceneStore.getState();
+    let target = store.objects.find(
+      (o) => store.selection.includes(o.id) && isImage(o)
+    ) as ImageObject | undefined;
+
+    if (!target) {
+      target = store.objects.find((o) => isImage(o)) as ImageObject | undefined;
+      if (target) {
+        store.setSelection([target.id]);
+      }
+    }
+
+    if (!target) {
+      store.showToast('Please import or select an image to crop', 'info');
+      store.setToolMode('select');
+      return;
+    }
+
+    cropSessionRef.current.targetId = target.id;
+    setOverlayState((prev) => ({ ...prev, cropTargetId: target!.id }));
+
+    if (toolMode === 'crop_magnetic') {
+      void (async () => {
+        try {
+          const imgData = await getImageDataFromAsset(
+            target!.assetId,
+            target!.origWidth,
+            target!.origHeight
+          );
+          if (imgData) {
+            cropSessionRef.current.magneticSession = initScissorsSession(imgData);
+          }
+        } catch (err) {
+          console.warn('Failed to init magnetic scissors session:', err);
+        }
+      })();
+    }
+  }, [toolMode]);
+
+  // Crop Action and Radius Event Listeners
+  useEffect(() => {
+    const onCropAction = async (e: Event) => {
+      const customEvent = e as CustomEvent<{ action: 'crop' | 'duplicate' | 'cut' }>;
+      const action = customEvent.detail?.action;
+      if (!action) return;
+
+      const store = useSceneStore.getState();
+      const targetId = cropSessionRef.current.targetId;
+      if (!targetId) return;
+
+      const target = store.objects.find((o) => o.id === targetId && isImage(o)) as
+        | ImageObject
+        | undefined;
+      if (!target) return;
+
+      let polygon: Point[] = [];
+      const mode = store.tool.mode;
+
+      if (mode === 'crop_rect' && cropSessionRef.current.rectCurrentLocal) {
+        const { x, y, width, height } = cropSessionRef.current.rectCurrentLocal;
+        polygon = [
+          { x, y },
+          { x: x + width, y },
+          { x: x + width, y: y + height },
+          { x, y: y + height },
+        ];
+      } else if (
+        (mode === 'crop_freeform' || mode === 'crop_magnetic') &&
+        cropSessionRef.current.freeformPointsLocal.length >= 3
+      ) {
+        polygon = cropSessionRef.current.freeformPointsLocal;
+      } else if (
+        mode === 'crop_magnetic' &&
+        cropSessionRef.current.magneticAnchorsLocal.length >= 3
+      ) {
+        polygon = smoothLassoPolygon([
+          ...cropSessionRef.current.magneticAnchorsLocal,
+          cropSessionRef.current.magneticAnchorsLocal[0],
+        ]);
+      }
+
+      if (polygon.length < 3) {
+        store.showToast('Please define a crop area first', 'info');
+        return;
+      }
+
+      try {
+        await applyCrop(target, polygon, action);
+        store.showToast(
+          `${action === 'crop' ? 'Image cropped' : action === 'duplicate' ? 'Region duplicated' : 'Region cut'} successfully`,
+          'success'
+        );
+      } catch (err) {
+        console.error('Failed to apply crop action:', err);
+        store.showToast('Failed to apply crop', 'error');
+      }
+
+      store.setToolMode('select');
+    };
+
+    const onCropCancel = () => {
+      useSceneStore.getState().setToolMode('select');
+    };
+
+    const onMagneticRadius = (e: Event) => {
+      const customEvent = e as CustomEvent<{ radius: number }>;
+      if (customEvent.detail?.radius) {
+        cropSessionRef.current.magneticRadius = customEvent.detail.radius;
+      }
+    };
+
+    window.addEventListener('canvas:crop-action', onCropAction);
+    window.addEventListener('canvas:crop-cancel', onCropCancel);
+    window.addEventListener('canvas:magnetic-radius', onMagneticRadius);
+
+    return () => {
+      window.removeEventListener('canvas:crop-action', onCropAction);
+      window.removeEventListener('canvas:crop-cancel', onCropCancel);
+      window.removeEventListener('canvas:magnetic-radius', onMagneticRadius);
+    };
+  }, []);
+
   // Native non-passive wheel listener for smooth cursor-anchored zoom & trackpad pan
   useEffect(() => {
     const el = containerRef.current;
@@ -208,6 +393,88 @@ export function Stage() {
     }
 
     if (e.button !== 0) return; // Only primary button for drawing/selection
+
+    // 0. Crop modes handling
+    if (
+      activeTool === 'crop_rect' ||
+      activeTool === 'crop_freeform' ||
+      activeTool === 'crop_magnetic'
+    ) {
+      const targetId = cropSessionRef.current.targetId;
+      const targetObj = store.objects.find(
+        (o) => o.id === targetId && isImage(o)
+      ) as ImageObject | undefined;
+      if (!targetObj) return;
+
+      const localPt = worldToLocal(targetObj, worldPt);
+
+      if (activeTool === 'crop_rect') {
+        cropSessionRef.current.rectStartLocal = localPt;
+        cropSessionRef.current.rectCurrentLocal = {
+          x: localPt.x,
+          y: localPt.y,
+          width: 0,
+          height: 0,
+        };
+        return;
+      }
+
+      if (activeTool === 'crop_freeform') {
+        cropSessionRef.current.freeformPointsLocal = [localPt];
+        setOverlayState((prev) => ({
+          ...prev,
+          lassoPoints: [worldPt],
+        }));
+        return;
+      }
+
+      if (activeTool === 'crop_magnetic') {
+        let snapped = localPt;
+        if (cropSessionRef.current.magneticSession) {
+          snapped = snapAnchorPoint(
+            cropSessionRef.current.magneticSession,
+            localPt,
+            cropSessionRef.current.magneticRadius
+          );
+        }
+
+        const anchors = cropSessionRef.current.magneticAnchorsLocal;
+
+        // Check if user clicked near first anchor to close loop
+        if (anchors.length >= 3) {
+          const firstWorld = localToWorld(targetObj, anchors[0]);
+          const distToFirst = Math.hypot(
+            worldPt.x - firstWorld.x,
+            worldPt.y - firstWorld.y
+          );
+          const zoom =
+            store.viewport.workMode === 'unlimited'
+              ? store.viewport.ulZoom
+              : store.viewport.zoomLevel;
+          if (distToFirst < 14 / zoom) {
+            // Close loop
+            const closedLocal = smoothLassoPolygon([...anchors, anchors[0]]);
+            cropSessionRef.current.freeformPointsLocal = closedLocal;
+            cropSessionRef.current.magneticAnchorsLocal = [];
+
+            setOverlayState((prev) => ({
+              ...prev,
+              lassoPoints: closedLocal.map((p) => localToWorld(targetObj, p)),
+              magneticAnchors: null,
+              magneticLivePath: null,
+            }));
+            return;
+          }
+        }
+
+        anchors.push(snapped);
+        setOverlayState((prev) => ({
+          ...prev,
+          magneticAnchors: anchors.map((p) => localToWorld(targetObj, p)),
+        }));
+        return;
+      }
+    }
 
     // 1. Line or Arrow drawing
     if (activeTool === 'line' || activeTool === 'arrow') {
@@ -398,6 +665,93 @@ export function Stage() {
 
     const pState = pointerStateRef.current;
     const store = useSceneStore.getState();
+    const activeTool = store.tool.mode;
+
+    // 0. Crop modes pointer move
+    if (activeTool === 'crop_rect' && cropSessionRef.current.rectStartLocal) {
+      const targetId = cropSessionRef.current.targetId;
+      const targetObj = store.objects.find(
+        (o) => o.id === targetId && isImage(o)
+      ) as ImageObject | undefined;
+      if (targetObj) {
+        const localPt = worldToLocal(targetObj, worldPt);
+        const start = cropSessionRef.current.rectStartLocal;
+        const minX = Math.min(start.x, localPt.x);
+        const minY = Math.min(start.y, localPt.y);
+        const w = Math.abs(localPt.x - start.x);
+        const h = Math.abs(localPt.y - start.y);
+        const clamped = clampRectToImage(
+          { x: minX, y: minY, width: w, height: h },
+          targetObj.width,
+          targetObj.height
+        );
+        cropSessionRef.current.rectCurrentLocal = clamped;
+
+        const tl = localToWorld(targetObj, { x: clamped.x, y: clamped.y });
+        const br = localToWorld(targetObj, {
+          x: clamped.x + clamped.width,
+          y: clamped.y + clamped.height,
+        });
+        setOverlayState((prev) => ({
+          ...prev,
+          cropRect: {
+            x: Math.min(tl.x, br.x),
+            y: Math.min(tl.y, br.y),
+            width: Math.abs(br.x - tl.x),
+            height: Math.abs(br.y - tl.y),
+          },
+        }));
+      }
+      return;
+    }
+
+    if (
+      activeTool === 'crop_freeform' &&
+      cropSessionRef.current.freeformPointsLocal.length > 0
+    ) {
+      const targetId = cropSessionRef.current.targetId;
+      const targetObj = store.objects.find(
+        (o) => o.id === targetId && isImage(o)
+      ) as ImageObject | undefined;
+      if (targetObj) {
+        const localPt = worldToLocal(targetObj, worldPt);
+        const pts = cropSessionRef.current.freeformPointsLocal;
+        const last = pts[pts.length - 1];
+        if (Math.hypot(localPt.x - last.x, localPt.y - last.y) >= 2) {
+          pts.push(localPt);
+          setOverlayState((prev) => ({
+            ...prev,
+            lassoPoints: pts.map((p) => localToWorld(targetObj, p)),
+          }));
+        }
+      }
+      return;
+    }
+
+    if (
+      activeTool === 'crop_magnetic' &&
+      cropSessionRef.current.magneticAnchorsLocal.length > 0
+    ) {
+      const targetId = cropSessionRef.current.targetId;
+      const targetObj = store.objects.find(
+        (o) => o.id === targetId && isImage(o)
+      ) as ImageObject | undefined;
+      if (targetObj && cropSessionRef.current.magneticSession) {
+        const localPt = worldToLocal(targetObj, worldPt);
+        const anchors = cropSessionRef.current.magneticAnchorsLocal;
+        const lastAnchor = anchors[anchors.length - 1];
+        const rawLivePath = findScissorsPath(
+          cropSessionRef.current.magneticSession,
+          lastAnchor,
+          localPt
+        );
+        setOverlayState((prev) => ({
+          ...prev,
+          magneticLivePath: rawLivePath.map((p) => localToWorld(targetObj, p)),
+        }));
+      }
+      return;
+    }
 
     // 1. Panning
     if (pState.mode === 'panning') {
@@ -617,6 +971,29 @@ export function Stage() {
     snapCandidatesRef.current = null;
     setOverlayState((prev) => ({ ...prev, marquee: null, guidelines: [] }));
 
+    const activeTool = store.tool.mode;
+    if (activeTool === 'crop_freeform') {
+      const targetId = cropSessionRef.current.targetId;
+      const targetObj = store.objects.find(
+        (o) => o.id === targetId && isImage(o)
+      ) as ImageObject | undefined;
+      const pts = cropSessionRef.current.freeformPointsLocal;
+      if (targetObj && pts.length >= 3) {
+        const closed = smoothLassoPolygon([...pts, pts[0]]);
+        cropSessionRef.current.freeformPointsLocal = closed;
+        setOverlayState((prev) => ({
+          ...prev,
+          lassoPoints: closed.map((p) => localToWorld(targetObj, p)),
+        }));
+      }
+      return;
+    }
+
+    if (activeTool === 'crop_rect') {
+      cropSessionRef.current.rectStartLocal = null;
+      return;
+    }
+
     if (
       pState.mode === 'dragging' ||
       pState.mode === 'resizing' ||
@@ -679,6 +1056,28 @@ export function Stage() {
     }
   };
 
+  const handleDoubleClick = () => {
+    const store = useSceneStore.getState();
+    if (store.tool.mode === 'crop_magnetic') {
+      const targetId = cropSessionRef.current.targetId;
+      const targetObj = store.objects.find(
+        (o) => o.id === targetId && isImage(o)
+      ) as ImageObject | undefined;
+      const anchors = cropSessionRef.current.magneticAnchorsLocal;
+      if (targetObj && anchors.length >= 3) {
+        const closed = smoothLassoPolygon([...anchors, anchors[0]]);
+        cropSessionRef.current.freeformPointsLocal = closed;
+        cropSessionRef.current.magneticAnchorsLocal = [];
+        setOverlayState((prev) => ({
+          ...prev,
+          lassoPoints: closed.map((p) => localToWorld(targetObj, p)),
+          magneticAnchors: null,
+          magneticLivePath: null,
+        }));
+      }
+    }
+  };
+
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     const renderer = rendererRef.current;
@@ -719,6 +1118,7 @@ export function Stage() {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
+      onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}

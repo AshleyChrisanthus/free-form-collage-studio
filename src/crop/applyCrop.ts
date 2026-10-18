@@ -221,7 +221,7 @@ export async function applyCrop(
   }
 
   const croppedBlob = await canvasToBlob(cropCanvas, 'image/png');
-  const croppedAssetId = generateId('asset');
+  const croppedAssetId = generateId();
 
   await db.assets.put({
     id: croppedAssetId,
@@ -264,7 +264,7 @@ export async function applyCrop(
   }
 
   const newObject: ImageObject = {
-    id: generateId('img'),
+    id: generateId(),
     type: 'image',
     assetId: croppedAssetId,
     origWidth: pixelBounds.width,
@@ -310,7 +310,7 @@ export async function applyCrop(
     }
 
     const cutBlob = await canvasToBlob(cutCanvas, 'image/png');
-    const cutAssetId = generateId('asset');
+    const cutAssetId = generateId();
 
     await db.assets.put({
       id: cutAssetId,

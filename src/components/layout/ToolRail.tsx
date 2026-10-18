@@ -72,7 +72,9 @@ export function ToolRail() {
       aria-label="Tool Rail"
     >
       {tools.map((t) => {
-        const isSelected = tool.mode === t.id;
+        const isSelected =
+          tool.mode === t.id ||
+          (t.id === 'crop_rect' && tool.mode.startsWith('crop_'));
         return (
           <button
             key={t.id}

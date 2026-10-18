@@ -15,9 +15,13 @@ import {
   Unlock,
   Eye,
   EyeOff,
+  Crop,
+  Wand2,
 } from 'lucide-react';
 import { useSceneStore } from '../../store/sceneStore';
 import { useSelectedObjects } from '../../store/selectors';
+import { isImage } from '../../types/guards';
+import { executeBackgroundRemoval } from '../../ai/bgRemoval';
 
 interface ContextMenuProps {
   x: number;
@@ -235,6 +239,39 @@ export function ContextMenu({ x, y, isOpen, onClose }: ContextMenuProps) {
           <span>Precision Sizing...</span>
         </span>
       </button>
+
+      {/* Image Crop & Background Removal */}
+      {selectedObjects.length === 1 && isImage(selectedObjects[0]) && (
+        <>
+          <div className="my-1 border-t border-[var(--border)]" />
+          <button
+            onClick={() =>
+              runAndClose(() => useSceneStore.getState().setToolMode('crop_rect'))
+            }
+            className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-accent/15 hover:text-accent text-left"
+            role="menuitem"
+          >
+            <span className="flex items-center gap-2">
+              <Crop size={13} className="text-accent" />
+              <span>Crop Image</span>
+            </span>
+          </button>
+          <button
+            onClick={() =>
+              runAndClose(() =>
+                void executeBackgroundRemoval(selectedObjects[0] as unknown as any)
+              )
+            }
+            className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-accent/15 hover:text-accent text-left"
+            role="menuitem"
+          >
+            <span className="flex items-center gap-2">
+              <Wand2 size={13} className="text-purple-400" />
+              <span>Remove Background</span>
+            </span>
+          </button>
+        </>
+      )}
 
       <div className="my-1 border-t border-[var(--border)]" />
 

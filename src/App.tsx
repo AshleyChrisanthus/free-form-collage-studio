@@ -9,6 +9,7 @@ import { Toast } from './components/layout/Toast';
 import { ThemeModal } from './components/ThemeModal';
 import { ShortcutsHelp } from './components/ShortcutsHelp';
 import { PrecisionObjectSizingDialog } from './components/framing/PrecisionObjectSizingDialog';
+import { CropBar } from './components/crop/CropBar';
 import { handleGlobalKeyDown } from './input/shortcuts';
 import { useVariantStore } from './store/variantStore';
 
@@ -44,6 +45,9 @@ export default function App() {
 
         {/* Top Horizontal Tool Ribbon (Excalidraw style) */}
         <ToolRail />
+
+        {/* Floating Crop Studio Action Bar */}
+        <CropBar />
 
         {/* Center 3-Layer Canvas Stage */}
         <Stage />

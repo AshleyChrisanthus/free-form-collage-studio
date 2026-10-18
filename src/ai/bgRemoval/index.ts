@@ -109,7 +109,7 @@ export async function executeBackgroundRemoval(
     ctx.putImageData(processedData, 0, 0);
   }
 
-  const newAssetId = generateId('asset');
+  const newAssetId = generateId();
   const blob = await new Promise<Blob>((resolve) => {
     if (typeof canvas.toBlob === 'function') {
       canvas.toBlob((b) => resolve(b || new Blob([], { type: 'image/png' })), 'image/png');

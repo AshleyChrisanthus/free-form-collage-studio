@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   ChevronRight,
   ChevronLeft,
@@ -18,12 +19,18 @@ import {
   Rows3,
   Columns3,
   Maximize2,
+  Crop,
+  Scissors,
+  Sparkles,
+  Wand2,
 } from 'lucide-react';
 import { useSceneStore } from '../../store/sceneStore';
 import { useSingleSelectedObject, useSelectedObjects } from '../../store/selectors';
 import { isImage, isLine } from '../../types/guards';
 import type { StrokeStyle, LineType } from '../../types/scene';
 import { PrecisionSizingPanel } from '../framing/PrecisionSizingPanel';
+import { executeBackgroundRemoval } from '../../ai/bgRemoval';
+import { useVariantStore } from '../../store/variantStore';
 
 export function Inspector() {
   const isOpen = useSceneStore((state) => state.ui.propertiesOpen);
@@ -58,6 +65,11 @@ export function Inspector() {
   const setActiveDialog = useSceneStore((state) => state.setActiveDialog);
   const beginTransaction = useSceneStore((state) => state.beginTransaction);
   const commitTransaction = useSceneStore((state) => state.commitTransaction);
+  const setToolMode = useSceneStore((state) => state.setToolMode);
+
+  const [bgThreshold, setBgThreshold] = useState(40);
+  const [isRemovingBg, setIsRemovingBg] = useState(false);
+  const bgVariant = useVariantStore((state) => state.variants.bgRemoval);
 
   if (!isOpen) {
     return (
@@ -199,6 +211,91 @@ export function Inspector() {
                 />
               </div>
             </div>
+
+            {/* Image Cropping & AI Background Removal */}
+            {isImage(singleObject) && (
+              <div className="space-y-3 border-t border-[var(--border)] pt-3">
+                {/* Cropping suite */}
+                <div>
+                  <label className="text-[11px] font-semibold text-fg-muted uppercase tracking-wider block mb-1.5">
+                    Cropping Suite
+                  </label>
+                  <div className="grid grid-cols-3 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setToolMode('crop_rect')}
+                      className="apple-btn apple-btn-secondary flex flex-col items-center justify-center py-1.5 gap-1 text-[10px]"
+                      title="Rectangle Crop"
+                    >
+                      <Crop size={14} className="text-accent" />
+                      <span>Rect</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setToolMode('crop_freeform')}
+                      className="apple-btn apple-btn-secondary flex flex-col items-center justify-center py-1.5 gap-1 text-[10px]"
+                      title="Freeform Lasso Crop"
+                    >
+                      <Scissors size={14} className="text-amber-500" />
+                      <span>Lasso</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setToolMode('crop_magnetic')}
+                      className="apple-btn apple-btn-secondary flex flex-col items-center justify-center py-1.5 gap-1 text-[10px]"
+                      title="Intelligent Scissors (Magnetic Edge Snapping)"
+                    >
+                      <Sparkles size={14} className="text-purple-500" />
+                      <span>Magnetic</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* AI Background Removal */}
+                <div className="pt-1">
+                  <div className="flex items-center justify-between text-[11px] mb-1.5">
+                    <span className="font-semibold text-fg-muted uppercase tracking-wider text-[10px]">
+                      Background Removal
+                    </span>
+                    <span className="apple-badge text-[9px] px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">
+                      {bgVariant === 'neural' ? 'AI Neural' : 'Heuristic'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] mb-1">
+                    <span className="text-fg-muted">Color Tolerance</span>
+                    <span className="font-mono text-[10px]">{bgThreshold}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="5"
+                    max="150"
+                    value={bgThreshold}
+                    onChange={(e) => setBgThreshold(Number(e.target.value))}
+                    className="w-full accent-accent mb-2"
+                  />
+
+                  <button
+                    type="button"
+                    disabled={isRemovingBg}
+                    onClick={async () => {
+                      setIsRemovingBg(true);
+                      try {
+                        await executeBackgroundRemoval(singleObject, {
+                          threshold: bgThreshold,
+                        });
+                      } finally {
+                        setIsRemovingBg(false);
+                      }
+                    }}
+                    className="apple-btn bg-accent hover:bg-accent/90 text-white w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium shadow-sm transition-all"
+                  >
+                    <Wand2 size={13} className={isRemovingBg ? 'animate-spin' : ''} />
+                    <span>{isRemovingBg ? 'Removing...' : 'Remove Background'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* If Line: Stroke, Arrowheads, Roughness */}
             {isLine(singleObject) && (

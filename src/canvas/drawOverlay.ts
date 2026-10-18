@@ -31,7 +31,10 @@ export interface OverlayState {
   guidelines: Array<{ orientation: 'h' | 'v'; pos: number; start?: number; end?: number }>;
   hoveredBinding: { objId: string; edge: string; point: Point } | null;
   cropRect: BoundingBox | null;
+  cropTargetId?: string | null;
   lassoPoints: Point[] | null;
+  magneticAnchors?: Point[] | null;
+  magneticLivePath?: Point[] | null;
 }
 
 /**
@@ -260,7 +263,41 @@ export function drawOverlay(
     ctx.restore();
   }
 
-  // 7. Lasso crop path preview
+  // 7. Crop Rect Overlay & Handles
+  if (overlay.cropRect) {
+    const { x, y, width, height } = overlay.cropRect;
+    ctx.save();
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 1.5 / zoom;
+    ctx.setLineDash([4 / zoom, 4 / zoom]);
+    ctx.strokeRect(x, y, width, height);
+
+    // Draw 8 handles on crop rect
+    const handleR = Math.max(3, 4 / zoom);
+    const pts = [
+      { x, y },
+      { x: x + width / 2, y },
+      { x: x + width, y },
+      { x, y: y + height / 2 },
+      { x: x + width, y: y + height / 2 },
+      { x, y: y + height },
+      { x: x + width / 2, y: y + height },
+      { x: x + width, y: y + height },
+    ];
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 1.5 / zoom;
+    ctx.setLineDash([]);
+    for (const p of pts) {
+      ctx.beginPath();
+      ctx.rect(p.x - handleR, p.y - handleR, handleR * 2, handleR * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 8. Lasso crop path preview
   if (overlay.lassoPoints && overlay.lassoPoints.length > 1) {
     ctx.save();
     ctx.strokeStyle = '#f59e0b';
@@ -272,6 +309,37 @@ export function drawOverlay(
       ctx.lineTo(overlay.lassoPoints[i].x, overlay.lassoPoints[i].y);
     }
     ctx.stroke();
+    ctx.restore();
+  }
+
+  // 9. Magnetic Live Path & Anchors
+  if (overlay.magneticLivePath && overlay.magneticLivePath.length > 1) {
+    ctx.save();
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 2 / zoom;
+    ctx.setLineDash([3 / zoom, 3 / zoom]);
+    ctx.beginPath();
+    ctx.moveTo(overlay.magneticLivePath[0].x, overlay.magneticLivePath[0].y);
+    for (let i = 1; i < overlay.magneticLivePath.length; i++) {
+      ctx.lineTo(overlay.magneticLivePath[i].x, overlay.magneticLivePath[i].y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  if (overlay.magneticAnchors && overlay.magneticAnchors.length > 0) {
+    ctx.save();
+    const anchorR = Math.max(3.5, 4.5 / zoom);
+    for (let i = 0; i < overlay.magneticAnchors.length; i++) {
+      const p = overlay.magneticAnchors[i];
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, anchorR, 0, Math.PI * 2);
+      ctx.fillStyle = i === 0 ? '#10b981' : '#f59e0b';
+      ctx.fill();
+      ctx.lineWidth = 1.5 / zoom;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+    }
     ctx.restore();
   }
 }
