@@ -114,13 +114,19 @@ export function getObjectResizeHandles(
  * Render interactive overlays: selection boxes, 8 handles, rotation stalk,
  * marquee, guidelines, and framing stage borders.
  */
+/**
+ * Render interactive overlays: selection boxes, 8 handles, rotation stalk,
+ * marquee, guidelines, crop overlays, and framing stage borders.
+ * Supports animated marching ants / dotted selection lines via dashOffset.
+ */
 export function drawOverlay(
   ctx: CanvasRenderingContext2D,
   objects: CanvasObject[],
   overlay: OverlayState,
   viewport: ViewportState,
   zoom: number,
-  settings?: GlobalSettings
+  settings?: GlobalSettings,
+  dashOffset: number = 0
 ): void {
   const selectedObjs = objects.filter((o) => overlay.selection.includes(o.id) && !o.hidden);
 
@@ -129,7 +135,7 @@ export function drawOverlay(
     drawFramingStageBounds(ctx, objects, viewport, settings);
   }
 
-  // 2. Selection outlines
+  // 2. Selection outlines (marching-ants dotted / dashed lines)
   for (const obj of selectedObjs) {
     const isGrouped = obj.groupId !== null;
     const strokeColor = obj.locked ? '#94a3b8' : isGrouped ? '#06b6d4' : '#3b82f6';
@@ -145,9 +151,12 @@ export function drawOverlay(
       ctx.rotate((obj.rotation * Math.PI) / 180);
     }
 
+    // High-visibility dual-pass or dotted outline
+    // Base dashed stroke:
+    ctx.lineDashOffset = -dashOffset;
     ctx.strokeStyle = strokeColor;
     ctx.lineWidth = 1.5 / zoom;
-    ctx.setLineDash([4 / zoom, 4 / zoom]);
+    ctx.setLineDash([5 / zoom, 4 / zoom]);
     ctx.strokeRect(-width / 2, -height / 2, width, height);
 
     // Stalk line connecting rotation handle to top-center (for single unlocked selection)
@@ -190,11 +199,12 @@ export function drawOverlay(
       rotation: 0,
     };
 
-    // Outer bounding frame for multi-selection
+    // Outer bounding frame for multi-selection (cyan / blue dotted marching ants)
     ctx.save();
-    ctx.strokeStyle = '#3b82f6';
-    ctx.lineWidth = 1 / zoom;
-    ctx.setLineDash([6 / zoom, 6 / zoom]);
+    ctx.lineDashOffset = -dashOffset;
+    ctx.strokeStyle = '#22d3ee';
+    ctx.lineWidth = 1.5 / zoom;
+    ctx.setLineDash([6 / zoom, 4 / zoom]);
     ctx.strokeRect(multiBox.x, multiBox.y, multiBox.width, multiBox.height);
     ctx.restore();
 
@@ -202,19 +212,22 @@ export function drawOverlay(
     renderHandles(ctx, handles, zoom);
   }
 
-  // 4. Marquee box
+  // 4. Marquee box (crisp dotted marching-ants outline with translucent tinted fill)
   if (overlay.marquee) {
     ctx.save();
     ctx.fillStyle = 'rgba(59, 130, 246, 0.12)';
-    ctx.strokeStyle = '#3b82f6';
-    ctx.lineWidth = 1 / zoom;
-    ctx.setLineDash([4 / zoom, 4 / zoom]);
     ctx.fillRect(
       overlay.marquee.x,
       overlay.marquee.y,
       overlay.marquee.width,
       overlay.marquee.height
     );
+
+    // Contrasting marching-ants dashed border
+    ctx.lineDashOffset = -dashOffset;
+    ctx.strokeStyle = '#3b82f6';
+    ctx.lineWidth = 1.5 / zoom;
+    ctx.setLineDash([5 / zoom, 3 / zoom]);
     ctx.strokeRect(
       overlay.marquee.x,
       overlay.marquee.y,
@@ -263,13 +276,14 @@ export function drawOverlay(
     ctx.restore();
   }
 
-  // 7. Crop Rect Overlay & Handles
+  // 7. Crop Rect Overlay & Handles (dotted purple/emerald border)
   if (overlay.cropRect) {
     const { x, y, width, height } = overlay.cropRect;
     ctx.save();
-    ctx.strokeStyle = '#10b981';
-    ctx.lineWidth = 1.5 / zoom;
-    ctx.setLineDash([4 / zoom, 4 / zoom]);
+    ctx.lineDashOffset = -dashOffset;
+    ctx.strokeStyle = '#a78bfa';
+    ctx.lineWidth = 2 / zoom;
+    ctx.setLineDash([6 / zoom, 4 / zoom]);
     ctx.strokeRect(x, y, width, height);
 
     // Draw 8 handles on crop rect
@@ -285,7 +299,7 @@ export function drawOverlay(
       { x: x + width, y: y + height },
     ];
     ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#10b981';
+    ctx.strokeStyle = '#a78bfa';
     ctx.lineWidth = 1.5 / zoom;
     ctx.setLineDash([]);
     for (const p of pts) {
@@ -297,33 +311,41 @@ export function drawOverlay(
     ctx.restore();
   }
 
-  // 8. Lasso crop path preview
+  // 8. Lasso crop path preview (dotted marching-ants outline with translucent fill)
   if (overlay.lassoPoints && overlay.lassoPoints.length > 1) {
     ctx.save();
-    ctx.strokeStyle = '#f59e0b';
+    ctx.lineDashOffset = -dashOffset;
+    ctx.strokeStyle = '#a78bfa';
     ctx.lineWidth = 2 / zoom;
-    ctx.setLineDash([3 / zoom, 3 / zoom]);
+    ctx.setLineDash([5 / zoom, 3 / zoom]);
+    ctx.fillStyle = 'rgba(167, 139, 250, 0.15)';
     ctx.beginPath();
     ctx.moveTo(overlay.lassoPoints[0].x, overlay.lassoPoints[0].y);
     for (let i = 1; i < overlay.lassoPoints.length; i++) {
       ctx.lineTo(overlay.lassoPoints[i].x, overlay.lassoPoints[i].y);
     }
     ctx.stroke();
+    ctx.fill();
     ctx.restore();
   }
 
-  // 9. Magnetic Live Path & Anchors
+  // 9. Magnetic Live Path & Anchors (dotted marching ants live wire)
   if (overlay.magneticLivePath && overlay.magneticLivePath.length > 1) {
     ctx.save();
-    ctx.strokeStyle = '#f59e0b';
+    ctx.lineDashOffset = -dashOffset;
+    ctx.strokeStyle = '#a78bfa';
     ctx.lineWidth = 2 / zoom;
-    ctx.setLineDash([3 / zoom, 3 / zoom]);
+    ctx.setLineDash([5 / zoom, 3 / zoom]);
+    ctx.fillStyle = 'rgba(167, 139, 250, 0.12)';
     ctx.beginPath();
     ctx.moveTo(overlay.magneticLivePath[0].x, overlay.magneticLivePath[0].y);
     for (let i = 1; i < overlay.magneticLivePath.length; i++) {
       ctx.lineTo(overlay.magneticLivePath[i].x, overlay.magneticLivePath[i].y);
     }
     ctx.stroke();
+    if (overlay.magneticAnchors && overlay.magneticAnchors.length > 2) {
+      ctx.fill();
+    }
     ctx.restore();
   }
 

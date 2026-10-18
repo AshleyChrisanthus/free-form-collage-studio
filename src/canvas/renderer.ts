@@ -147,14 +147,28 @@ export function createRenderer({
     }
 
     // Redraw Interactive Overlay Layer
+    const overlay = getOverlayState();
+    const hasActiveAnts =
+      overlay.selection.length > 0 ||
+      !!overlay.marquee ||
+      !!overlay.cropRect ||
+      (!!overlay.lassoPoints && overlay.lassoPoints.length > 0) ||
+      (!!overlay.magneticLivePath && overlay.magneticLivePath.length > 0);
+
+    // If active selection/marquee/crop exists, mark overlay dirty so the marching ants crawl
+    if (hasActiveAnts) {
+      overlayDirty = true;
+    }
+
     if (overlayDirty && overlayCtx) {
       overlayCtx.setTransform(1, 0, 0, 1, 0, 0);
       overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 
       overlayCtx.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * panX, dpr * panY);
 
-      const overlay = getOverlayState();
-      drawOverlay(overlayCtx, state.objects, overlay, state.viewport, zoom, state.settings);
+      // Dash offset advances based on performance timer (smooth crawl)
+      const dashOffset = (performance.now() / 40) % 24;
+      drawOverlay(overlayCtx, state.objects, overlay, state.viewport, zoom, state.settings, dashOffset);
       overlayDirty = false;
     }
 
