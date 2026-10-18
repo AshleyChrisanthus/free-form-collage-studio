@@ -17,7 +17,8 @@ import {
 import { useSceneStore } from '../../store/sceneStore';
 import { useSingleSelectedObject, useSelectedObjects } from '../../store/selectors';
 import { isImage, isLine } from '../../types/guards';
-import type { CanvasPreset, StrokeStyle, LineType } from '../../types/scene';
+import type { StrokeStyle, LineType } from '../../types/scene';
+import { PrecisionSizingPanel } from '../framing/PrecisionSizingPanel';
 
 export function Inspector() {
   const isOpen = useSceneStore((state) => state.ui.propertiesOpen);
@@ -29,8 +30,6 @@ export function Inspector() {
   const viewport = useSceneStore((state) => state.viewport);
   const settings = useSceneStore((state) => state.settings);
   const updateSettings = useSceneStore((state) => state.updateSettings);
-  const setCanvasPreset = useSceneStore((state) => state.setCanvasPreset);
-  const setCanvasLock = useSceneStore((state) => state.setCanvasLock);
   const setUnlimitedTheme = useSceneStore((state) => state.setUnlimitedTheme);
 
   // Store action hooks
@@ -418,34 +417,7 @@ export function Inspector() {
                 </div>
               </div>
             ) : (
-              <div className="space-y-2">
-                <label className="text-[11px] font-semibold text-fg-muted uppercase tracking-wider">
-                  Framing Stage Presets
-                </label>
-                <select
-                  value={viewport.canvasMode}
-                  onChange={(e) => setCanvasPreset(e.target.value as CanvasPreset)}
-                  className="apple-input w-full text-xs py-1"
-                >
-                  <option value="auto">Auto (Wrap to content)</option>
-                  <option value="1:1">1:1 Square (1080 × 1080)</option>
-                  <option value="16:9">16:9 Landscape (1920 × 1080)</option>
-                  <option value="9:16">9:16 Story / Reel (1080 × 1920)</option>
-                  <option value="4:3">4:3 Standard (1440 × 1080)</option>
-                  <option value="3:4">3:4 Portrait (1080 × 1440)</option>
-                  <option value="custom">Custom Dimensions</option>
-                </select>
-
-                <div className="flex items-center justify-between pt-1">
-                  <span>Lock Canvas Size</span>
-                  <input
-                    type="checkbox"
-                    checked={viewport.canvasLocked}
-                    onChange={(e) => setCanvasLock(e.target.checked)}
-                    className="accent-accent"
-                  />
-                </div>
-              </div>
+              <PrecisionSizingPanel />
             )}
 
             {/* Canvas Global Settings */}
