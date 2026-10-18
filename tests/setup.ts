@@ -27,3 +27,15 @@ if (typeof globalThis.ImageData === 'undefined') {
     }
   } as unknown as typeof globalThis.ImageData;
 }
+
+if (typeof HTMLCanvasElement !== 'undefined') {
+  HTMLCanvasElement.prototype.toBlob = function (
+    callback: (blob: Blob | null) => void,
+    type: string = 'image/png'
+  ) {
+    setTimeout(() => {
+      callback(new Blob(['mock-canvas-blob'], { type }));
+    }, 0);
+  };
+}
+
