@@ -14,6 +14,7 @@ import {
   animateViewport,
   clampUnlimitedZoom,
   clampFramingZoom,
+  computeFitViewport,
   type AnimationCancelFn,
 } from '../../canvas/viewport';
 import { computeCanvasSize } from '../../framing/canvasSize';
@@ -80,35 +81,37 @@ export function FloatingToolbar() {
     return { isOffscreen: offscreen, directionAngleDeg: angleDeg - 45 };
   }, [objects, isUnlimited, viewport.ulPanX, viewport.ulPanY, viewport.ulZoom]);
 
+  /** Size of the visible canvas area (excludes side panels), falling back to the window. */
+  const getStageViewportSize = () => {
+    const el = document.querySelector<HTMLElement>('[data-stage-container]');
+    const w = el?.clientWidth || window.innerWidth;
+    const h = el?.clientHeight || window.innerHeight;
+    return { vw: w, vh: h };
+  };
+
   const handleFitContent = () => {
     animCancelRef.current?.();
 
-    if (objects.length === 0) {
+    // Read live state: this may run from a keyboard shortcut or mid-animation.
+    const state = useSceneStore.getState();
+    const objs = state.objects.filter((o) => !o.hidden);
+    const vp = state.viewport;
+
+    if (objs.length === 0) {
       handleResetView();
       return;
     }
 
-    const bounds = unionBounds(objects);
+    const bounds = unionBounds(objs);
     if (!bounds) return;
 
-    const margin = 80;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+    const { vw, vh } = getStageViewportSize();
 
-    const scaleX = (vw - margin * 2) / Math.max(1, bounds.width);
-    const scaleY = (vh - margin * 2) / Math.max(1, bounds.height);
-    const targetZoom = clampUnlimitedZoom(Math.min(scaleX, scaleY));
-
-    const cx = bounds.x + bounds.width / 2;
-    const cy = bounds.y + bounds.height / 2;
-
-    const targetPanX = vw / 2 - cx * targetZoom;
-    const targetPanY = vh / 2 - cy * targetZoom;
-
-    if (isUnlimited) {
+    if (vp.workMode === 'unlimited') {
+      const target = computeFitViewport(bounds, vw, vh, 80);
       animCancelRef.current = animateViewport(
-        { panX: viewport.ulPanX, panY: viewport.ulPanY, zoom: viewport.ulZoom },
-        { panX: targetPanX, panY: targetPanY, zoom: targetZoom },
+        { panX: vp.ulPanX, panY: vp.ulPanY, zoom: vp.ulZoom },
+        target,
         350,
         (curr) => {
           setPan(curr.panX, curr.panY);
@@ -117,8 +120,9 @@ export function FloatingToolbar() {
       );
     } else {
       // Framing mode: fit stage to screen
+      const stage = computeCanvasSize(state.objects, vp, state.settings);
       const fitZoom = clampFramingZoom(
-        Math.min((vw * 0.9) / stageSize.width, (vh * 0.9) / stageSize.height)
+        Math.min((vw * 0.9) / stage.width, (vh * 0.9) / stage.height)
       );
       setFramingZoom(fitZoom);
     }
@@ -126,9 +130,10 @@ export function FloatingToolbar() {
 
   const handleResetView = () => {
     animCancelRef.current?.();
-    if (isUnlimited) {
+    const vp = useSceneStore.getState().viewport;
+    if (vp.workMode === 'unlimited') {
       animCancelRef.current = animateViewport(
-        { panX: viewport.ulPanX, panY: viewport.ulPanY, zoom: viewport.ulZoom },
+        { panX: vp.ulPanX, panY: vp.ulPanY, zoom: vp.ulZoom },
         { panX: 0, panY: 0, zoom: 1.0 },
         350,
         (curr) => {
@@ -141,10 +146,15 @@ export function FloatingToolbar() {
     }
   };
 
-  // Keyboard shortcut events from shortcuts.ts
+  // Keyboard shortcut events from shortcuts.ts.
+  // Subscribe once: re-subscribing on viewport changes would run the cleanup
+  // (which cancels the animation) on the very first animation frame (#41).
+  const shortcutHandlersRef = useRef({ fit: handleFitContent, reset: handleResetView });
+  shortcutHandlersRef.current = { fit: handleFitContent, reset: handleResetView };
+
   useEffect(() => {
-    const onFit = () => handleFitContent();
-    const onReset = () => handleResetView();
+    const onFit = () => shortcutHandlersRef.current.fit();
+    const onReset = () => shortcutHandlersRef.current.reset();
     window.addEventListener('canvas:fit-content', onFit);
     window.addEventListener('canvas:reset-view', onReset);
     return () => {
@@ -152,7 +162,7 @@ export function FloatingToolbar() {
       window.removeEventListener('canvas:reset-view', onReset);
       animCancelRef.current?.();
     };
-  }, [objects, isUnlimited, viewport, stageSize]);
+  }, []);
 
   // Zoom step buttons
   const handleZoomOut = () => {

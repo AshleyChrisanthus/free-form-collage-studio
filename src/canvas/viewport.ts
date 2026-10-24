@@ -80,6 +80,33 @@ export interface CameraAnimationTarget {
   zoom: number;
 }
 
+/**
+ * Computes the camera (pan + zoom) that fits `bounds` entirely inside a
+ * `viewW` x `viewH` viewport with `margin` px of padding, centred. The result
+ * depends only on the content and viewport size, never on the current camera,
+ * so a single Fit always lands on the same framing whether zoomed in or out.
+ */
+export function computeFitViewport(
+  bounds: { x: number; y: number; width: number; height: number },
+  viewW: number,
+  viewH: number,
+  margin: number = 80
+): CameraAnimationTarget {
+  // Keep some usable area even on very small viewports.
+  const m = Math.min(margin, viewW / 4, viewH / 4);
+  const scaleX = (viewW - m * 2) / Math.max(1, bounds.width);
+  const scaleY = (viewH - m * 2) / Math.max(1, bounds.height);
+  const zoom = clampUnlimitedZoom(Math.min(scaleX, scaleY));
+
+  const cx = bounds.x + bounds.width / 2;
+  const cy = bounds.y + bounds.height / 2;
+  return {
+    zoom,
+    panX: viewW / 2 - cx * zoom,
+    panY: viewH / 2 - cy * zoom,
+  };
+}
+
 export type AnimationCancelFn = () => void;
 
 /**

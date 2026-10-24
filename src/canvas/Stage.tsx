@@ -1151,6 +1151,7 @@ export function Stage() {
   return (
     <div
       ref={containerRef}
+      data-stage-container
       className="relative flex-1 h-full w-full overflow-hidden select-none"
       style={{
         cursor,
