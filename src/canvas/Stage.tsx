@@ -63,6 +63,8 @@ export function Stage() {
     rectStartLocal: Point | null;
     rectCurrentLocal: BoundingBox | null;
     freeformPointsLocal: Point[];
+    /** True only while the mouse button is held during a freeform lasso drag. */
+    freeformDrawing: boolean;
     magneticSession: IntelligentScissorsSession | null;
     magneticAnchorsLocal: Point[];
     magneticRadius: number;
@@ -71,6 +73,7 @@ export function Stage() {
     rectStartLocal: null,
     rectCurrentLocal: null,
     freeformPointsLocal: [],
+    freeformDrawing: false,
     magneticSession: null,
     magneticAnchorsLocal: [],
     magneticRadius: 8,
@@ -191,6 +194,7 @@ export function Stage() {
         rectStartLocal: null,
         rectCurrentLocal: null,
         freeformPointsLocal: [],
+        freeformDrawing: false,
         magneticSession: null,
         magneticAnchorsLocal: [],
         magneticRadius: 8,
@@ -425,6 +429,7 @@ export function Stage() {
 
       if (activeTool === 'crop_freeform') {
         cropSessionRef.current.freeformPointsLocal = [localPt];
+        cropSessionRef.current.freeformDrawing = true;
         setOverlayState((prev) => ({
           ...prev,
           lassoPoints: [worldPt],
@@ -709,10 +714,10 @@ export function Stage() {
       return;
     }
 
-    if (
-      activeTool === 'crop_freeform' &&
-      cropSessionRef.current.freeformPointsLocal.length > 0
-    ) {
+    if (activeTool === 'crop_freeform') {
+      // Only extend the lasso while the button is held; hovering after release
+      // must leave the finished (closed) selection untouched.
+      if (!cropSessionRef.current.freeformDrawing) return;
       const targetId = cropSessionRef.current.targetId;
       const targetObj = store.objects.find(
         (o) => o.id === targetId && isImage(o)
@@ -977,6 +982,8 @@ export function Stage() {
 
     const activeTool = store.tool.mode;
     if (activeTool === 'crop_freeform') {
+      if (!cropSessionRef.current.freeformDrawing) return;
+      cropSessionRef.current.freeformDrawing = false;
       const targetId = cropSessionRef.current.targetId;
       const targetObj = store.objects.find(
         (o) => o.id === targetId && isImage(o)
