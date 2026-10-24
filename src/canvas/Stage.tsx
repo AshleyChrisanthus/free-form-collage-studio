@@ -181,6 +181,49 @@ export function Stage() {
 
   const toolMode = useSceneStore((state) => state.tool.mode);
 
+  /**
+   * Point the crop session at `target`, discarding any in-progress crop shape.
+   * Used when entering a crop mode, switching between crop modes, and when the
+   * user starts a crop gesture on a different image than the current target.
+   */
+  const beginCropSession = (target: ImageObject, mode: string) => {
+    const session = cropSessionRef.current;
+    session.targetId = target.id;
+    session.rectStartLocal = null;
+    session.rectCurrentLocal = null;
+    session.freeformPointsLocal = [];
+    session.freeformDrawing = false;
+    session.magneticSession = null;
+    session.magneticAnchorsLocal = [];
+
+    setOverlayState((prev) => ({
+      ...prev,
+      cropTargetId: target.id,
+      cropRect: null,
+      lassoPoints: null,
+      magneticAnchors: null,
+      magneticLivePath: null,
+    }));
+
+    if (mode === 'crop_magnetic') {
+      void (async () => {
+        try {
+          const imgData = await getImageDataFromAsset(
+            target.assetId,
+            target.origWidth,
+            target.origHeight
+          );
+          // Ignore late results if the user has since moved to another image.
+          if (imgData && cropSessionRef.current.targetId === target.id) {
+            cropSessionRef.current.magneticSession = initScissorsSession(imgData);
+          }
+        } catch (err) {
+          console.warn('Failed to init magnetic scissors session:', err);
+        }
+      })();
+    }
+  };
+
   // Sync crop session when entering or leaving crop modes
   useEffect(() => {
     const isCropMode =
@@ -211,42 +254,24 @@ export function Stage() {
     }
 
     const store = useSceneStore.getState();
-    let target = store.objects.find(
+    // Prefer the selected image, then the current target (when switching crop
+    // modes), then any image. The target is re-picked on pointer-down anyway.
+    let target = (store.objects.find(
       (o) => store.selection.includes(o.id) && isImage(o)
-    ) as ImageObject | undefined;
-
-    if (!target) {
-      target = store.objects.find((o) => isImage(o)) as ImageObject | undefined;
-      if (target) {
-        store.setSelection([target.id]);
-      }
-    }
+    ) ??
+      store.objects.find((o) => o.id === cropSessionRef.current.targetId && isImage(o)) ??
+      store.objects.find((o) => isImage(o))) as ImageObject | undefined;
 
     if (!target) {
       store.showToast('Please import or select an image to crop', 'info');
       store.setToolMode('select');
       return;
     }
-
-    cropSessionRef.current.targetId = target.id;
-    setOverlayState((prev) => ({ ...prev, cropTargetId: target!.id }));
-
-    if (toolMode === 'crop_magnetic') {
-      void (async () => {
-        try {
-          const imgData = await getImageDataFromAsset(
-            target!.assetId,
-            target!.origWidth,
-            target!.origHeight
-          );
-          if (imgData) {
-            cropSessionRef.current.magneticSession = initScissorsSession(imgData);
-          }
-        } catch (err) {
-          console.warn('Failed to init magnetic scissors session:', err);
-        }
-      })();
+    if (!store.selection.includes(target.id)) {
+      store.setSelection([target.id]);
     }
+
+    beginCropSession(target, toolMode);
   }, [toolMode]);
 
   // Crop Action and Radius Event Listeners
@@ -408,6 +433,17 @@ export function Stage() {
       activeTool === 'crop_freeform' ||
       activeTool === 'crop_magnetic'
     ) {
+      // Retarget to the image under the cursor so cropping works on whichever
+      // image the user drags over (not just the one picked on mode entry).
+      // Don't retarget mid-way through placing magnetic anchors.
+      const hit = renderer.hitTest(worldPt);
+      const midMagnetic =
+        activeTool === 'crop_magnetic' && cropSessionRef.current.magneticAnchorsLocal.length > 0;
+      if (hit && isImage(hit) && hit.id !== cropSessionRef.current.targetId && !midMagnetic) {
+        beginCropSession(hit, activeTool);
+        store.setSelection([hit.id]);
+      }
+
       const targetId = cropSessionRef.current.targetId;
       const targetObj = store.objects.find(
         (o) => o.id === targetId && isImage(o)

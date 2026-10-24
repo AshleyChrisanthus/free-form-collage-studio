@@ -30,6 +30,12 @@ export const SHORTCUTS: ShortcutDefinition[] = [
     category: 'Tools',
     action: () => useSceneStore.getState().setToolMode('arrow'),
   },
+  {
+    key: 'c',
+    description: 'Crop tool',
+    category: 'Tools',
+    action: () => useSceneStore.getState().setToolMode('crop_rect'),
+  },
 
   // History
   {
