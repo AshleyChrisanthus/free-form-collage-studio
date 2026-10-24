@@ -15,6 +15,7 @@ import { LayerRow } from './LayerRow';
 
 export function LayersPanel() {
   const isOpen = useSceneStore((state) => state.ui.layersOpen);
+  const propertiesOpen = useSceneStore((state) => state.ui.propertiesOpen);
   const toggleLayers = useSceneStore((state) => state.toggleLayers);
   const objects = useSceneStore((state) => state.objects);
   const selection = useSceneStore((state) => state.selection);
@@ -44,11 +45,12 @@ export function LayersPanel() {
     return (
       <button
         onClick={() => toggleLayers(true)}
-        className="glass absolute right-3 top-3 z-20 apple-btn apple-btn-icon shadow-md"
+        className="glass pointer-events-auto self-end apple-btn flex items-center gap-1.5 px-3 py-1.5 text-xs shadow-md flex-shrink-0"
         title="Open Layers Panel"
         aria-label="Open Layers Panel"
       >
-        <Layers size={16} />
+        <Layers size={14} className="text-accent" />
+        <span>Layers ({objects.length})</span>
       </button>
     );
   }
@@ -99,9 +101,13 @@ export function LayersPanel() {
     }
   };
 
+  const hasOpenProperties = selection.length > 0 && propertiesOpen;
+
   return (
     <aside
-      className="glass absolute right-3 top-3 z-20 flex w-72 flex-col max-h-[calc(100vh-2.5rem)] overflow-hidden rounded-[var(--radius)] shadow-xl text-xs"
+      className={`glass pointer-events-auto flex w-72 flex-col min-h-0 overflow-hidden rounded-[var(--radius)] shadow-xl text-xs ${
+        hasOpenProperties ? 'flex-1 max-h-[45%]' : 'max-h-full'
+      }`}
       aria-label="Layers Panel"
     >
       {/* Header */}

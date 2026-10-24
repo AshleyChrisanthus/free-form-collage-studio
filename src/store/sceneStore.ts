@@ -73,6 +73,7 @@ export interface SceneState {
     lineDefaults: LineStyleDefaults;
   };
   ui: {
+    canvasOpen: boolean;
     layersOpen: boolean;
     propertiesOpen: boolean;
     activeDialog: string | null;
@@ -142,6 +143,7 @@ export interface SceneState {
   setLineDefaults: (defaults: Partial<LineStyleDefaults>) => void;
 
   // UI
+  toggleCanvas: (open?: boolean) => void;
   toggleLayers: (open?: boolean) => void;
   toggleProperties: (open?: boolean) => void;
   setActiveDialog: (dialog: string | null) => void;
@@ -272,6 +274,7 @@ export const useSceneStore = create<SceneState>()(
         lineDefaults: { ...DEFAULT_LINE_STYLE },
       },
       ui: {
+        canvasOpen: true,
         layersOpen: true,
         propertiesOpen: true,
         activeDialog: null,
@@ -890,6 +893,12 @@ export const useSceneStore = create<SceneState>()(
       },
 
       // UI Actions
+      toggleCanvas: (open?: boolean) => {
+        set((draft) => {
+          draft.ui.canvasOpen = open !== undefined ? open : !draft.ui.canvasOpen;
+        });
+      },
+
       toggleLayers: (open?: boolean) => {
         set((draft) => {
           draft.ui.layersOpen = open !== undefined ? open : !draft.ui.layersOpen;

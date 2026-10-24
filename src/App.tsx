@@ -4,6 +4,7 @@ import { ToolRail } from './components/layout/ToolRail';
 import { Stage } from './canvas/Stage';
 import { FloatingToolbar } from './components/layout/FloatingToolbar';
 import { Inspector } from './components/layout/Inspector';
+import { ObjectPropertiesPanel } from './components/layout/ObjectPropertiesPanel';
 import { LayersPanel } from './components/layers/LayersPanel';
 import { Toast } from './components/layout/Toast';
 import { ThemeModal } from './components/ThemeModal';
@@ -40,7 +41,7 @@ export default function App() {
 
       {/* Main Studio Workspace Stage */}
       <main className="relative flex flex-1 overflow-hidden">
-        {/* Canvas & Layout / Properties Inspector (Left Panel) */}
+        {/* Canvas & Layout Panel (Left Panel, always accessible) */}
         <Inspector />
 
         {/* Top Horizontal Tool Ribbon (Excalidraw style) */}
@@ -52,8 +53,14 @@ export default function App() {
         {/* Center 3-Layer Canvas Stage */}
         <Stage />
 
-        {/* Layers Panel (Right Panel) */}
-        <LayersPanel />
+        {/* Right Sidebars: Layers (top) + Object/Image Properties (below, when selected) */}
+        <div
+          className="pointer-events-none absolute right-3 top-3 bottom-3 z-20 flex w-72 flex-col items-end gap-3"
+          data-testid="right-sidebar-dock"
+        >
+          <LayersPanel />
+          <ObjectPropertiesPanel />
+        </div>
 
         {/* Floating Zoom & Fit Toolbar (Bottom Center) */}
         <FloatingToolbar />
